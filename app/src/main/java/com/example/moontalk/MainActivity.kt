@@ -1,5 +1,6 @@
 package com.example.moontalk
 
+import android.R
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.*
@@ -18,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
@@ -36,18 +39,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         startService(Intent(this, ExitDetectionService::class.java))
-        enableEdgeToEdge()
+        //enableEdgeToEdge()
         setContent {
             MoonTalkTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
                     var isAuthenticated by remember { mutableStateOf(false) }
-                    Crossfade(targetState = isAuthenticated) { isAuth ->
-                        if (isAuth) {
-                            FindCompanions()
-                        } else {
-                            MoonTalkSignIn({
-                                isAuthenticated = true
-                            })
+                    var showRegister by remember {mutableStateOf(false)}
+                    Crossfade(targetState = Pair(isAuthenticated, showRegister)) { (isAuth, isRegister) ->
+                        when {
+                            isAuth -> FindCompanions()
+                            isRegister -> MoonTalkRegistration({isAuthenticated = true},
+                                {showRegister = false})
+                            else -> MoonTalkSignIn({isAuthenticated = true},
+                                {showRegister = true})
                         }
                     }
                 }
@@ -56,14 +60,20 @@ class MainActivity : ComponentActivity() {
     }
 }
 @Composable
-fun MoonTalkSignIn(onAuthSuccess: () -> Unit) {
+fun MoonTalkSignIn(onAuthSuccess: () -> Unit,
+                   onNavigateToRegister: () -> Unit) {
     var email by remember {mutableStateOf("")}
     var password by remember {mutableStateOf("")}
     var isLoading by remember {mutableStateOf(false)}
     var scope = rememberCoroutineScope()
     var showAlert by remember {mutableStateOf(false)}
     var alertMessage by remember {mutableStateOf("")}
-
+    Column(modifier = Modifier.fillMaxSize().padding(top = 20.dp), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.End) {
+        Text("Нет аккаунта?", color = Color.White)
+        Text("Зарегистрироваться", fontWeight = FontWeight.ExtraBold, color = Color.White, textDecoration = TextDecoration.Underline, fontSize = 20.sp, modifier = Modifier.clickable(true){
+            onNavigateToRegister()
+        })
+    }
     Column (modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
     verticalArrangement = Arrangement.Center){
         Row (modifier = Modifier.padding(bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {

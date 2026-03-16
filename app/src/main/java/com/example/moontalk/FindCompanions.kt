@@ -6,9 +6,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
@@ -43,6 +47,7 @@ fun FindCompanions(){
 
     LaunchedEffect(isSearching) {
         if (isSearching) {
+            seconds = 0
             while (isSearching) {
                 delay(1000)
                 seconds++
@@ -53,8 +58,12 @@ fun FindCompanions(){
     Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Button (onClick = {
             task.launch {
-                isSearching = true;
-                rep.startSearchCompanions()
+                if (isSearching) {
+                    isSearching = false;
+                } else {
+                    isSearching = true;
+                    rep.startSearchCompanions()
+                }
             }
         },
             modifier = Modifier
@@ -68,9 +77,23 @@ fun FindCompanions(){
             Text(text = if (!isSearching) "Поиск" else "Отмена", textAlign = TextAlign.Center,
                 fontSize = 30.sp)
         }
-        if (isSearching) {
-            Text("${seconds}", color = Color.White, fontSize = 24.sp)
+        Spacer(modifier = Modifier.height(20.dp))
+        Box(
+            modifier = Modifier.height(50.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isSearching) {
+                Text(
+                    text = formatTime(seconds),
+                    color = Color.White,
+                    fontSize = 24.sp
+                )
+            }
         }
     }
-
+}
+fun formatTime(totalSeconds: Int): String {
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%02d:%02d", minutes, seconds)
 }

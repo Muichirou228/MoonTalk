@@ -9,14 +9,14 @@ import kotlin.collections.mapOf
 
 class SupabaseRepository {
     private val client = SupabaseClient.client
-    suspend fun signIn (email: String, password: String): Result<Profile> = try {
+    suspend fun signIn(email: String, password: String): Result<Profile> = try {
         val result = client.auth.signInWith(Email) {
             this.email = email
             this.password = password
         }
         val userId = client.auth.currentUserOrNull()?.id
             ?: throw Exception("Failed to get user after login")
-        client.from("profiles").update (mapOf("is_online" to true)){
+        client.from("profiles").update(mapOf("is_online" to true)) {
             filter { eq("id", userId) }
         }
         val profile = client.from("profiles").select {
@@ -36,9 +36,35 @@ class SupabaseRepository {
             }
         }
         Result.success(Unit);
+    } catch (e: Exception) {
+        Result.failure(e);
+    }
+
+    suspend fun register(
+        userName: String,
+        email: String,
+        password: String,
+        language: String
+    ): Result<Profile> {
+        return try {
+            val result = client.auth.signUpWith(Email) {
+                this.email = email
+                this.password = password
+            }
+            val userId = client.auth.currentUserOrNull()?.id
+                ?: return Result.failure(Exception("Couldn't find userid"))
+            var profile = Profile(
+                id = userId,
+                username = userName,
+                learning_language = language,
+            )
+            client.from("profiles").insert(profile)
+            //signIn(email, password)
+            Result.success(profile)
         } catch (e: Exception) {
-            Result.failure(e);
+            Result.failure(e)
         }
+    }
 
     suspend fun startSearchCompanions() {
 
