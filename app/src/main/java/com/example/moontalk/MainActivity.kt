@@ -30,6 +30,7 @@ import io.github.jan.supabase.gotrue.SessionStatus
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -104,9 +105,10 @@ fun MoonTalkSignIn(onAuthSuccess: () -> Unit,
                     var result = rep.signIn(email, password)
                     if (result.isSuccess) {
                         val profile = result.getOrNull()
-//                      alertMessage = profile!!.username
-//                      showAlert = true
+//                        alertMessage = profile!!.username
+//                        showAlert = true
                         withContext(Dispatchers.Main) {
+                            //delay(1000) //!!!!!!!!
                             isLoading = false
                             onAuthSuccess()
                         }

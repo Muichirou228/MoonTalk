@@ -60,9 +60,11 @@ fun FindCompanions(){
             task.launch {
                 if (isSearching) {
                     isSearching = false;
+                    rep.changeUserSearching(isSearching)
                 } else {
                     isSearching = true;
-                    rep.startSearchCompanions()
+                    rep.changeUserSearching(isSearching)
+                    //rep.startSearchCompanions()
                 }
             }
         },

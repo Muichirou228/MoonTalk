@@ -34,6 +34,9 @@ class SupabaseRepository {
             client.from("profiles").update(mapOf("is_online" to false)) {
                 filter { eq("id", userId) }
             }
+            client.from("profiles").update(mapOf("is_searching" to false)) {
+                filter { eq("id", userId) }
+            }
         }
         Result.success(Unit);
     } catch (e: Exception) {
@@ -47,6 +50,8 @@ class SupabaseRepository {
         language: String
     ): Result<Profile> {
         return try {
+            if (password.length < 6) return Result.failure(Exception("Пароль должен быть минимум 6 символов"))
+            if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) return Result.failure(Exception("Форма почты неверная"))
             val result = client.auth.signUpWith(Email) {
                 this.email = email
                 this.password = password
@@ -57,13 +62,21 @@ class SupabaseRepository {
                 id = userId,
                 username = userName,
                 learning_language = language,
+                is_online = true,
             )
             client.from("profiles").insert(profile)
-            //signIn(email, password)
             Result.success(profile)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun changeUserSearching(flag: Boolean): Result<Unit> {
+        val userId = client.auth.currentUserOrNull()?.id.toString()
+        client.from("profiles").update(mapOf("is_searching" to flag)) {
+            filter { eq("id", userId) }
+        }
+        return Result.success(Unit)
     }
 
     suspend fun startSearchCompanions() {

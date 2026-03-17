@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -126,15 +127,24 @@ fun MoonTalkRegistration(onRegisterSuccess: () -> Unit,
                     isLoading = true;
                     var result = rep.register(userName, email, password, selectedLanguage)
                     if (result.isSuccess) {
-                        //val profile = result.getOrNull()
-                        alertMessage = "Профиль добавлен"
+                        alertMessage = "Профиль добавлен, производится вход..."
                         showAlert = true
                         withContext(Dispatchers.Main) {
                             isLoading = false
+                            delay(2000)
                             onRegisterSuccess()
                         }
                     } else {
-                        alertMessage = result.exceptionOrNull().toString()
+                        alertMessage = when {
+                            alertMessage.contains("User already") -> "Пользователь с такой почтой уже зарегистрирован"
+                            alertMessage.contains("email rate limit") -> "Слишком много попыток, попробуйте через 5 минут"
+                            alertMessage.contains("invalid email") -> "Некорректный формат email"
+                            alertMessage.contains("weak password") -> "Пароль слишком слабый"
+                            alertMessage.contains("duplicate") && alertMessage.contains("username") -> "Никнейм уже занят"
+                            alertMessage.contains("network") -> "Проблема с интернетом"
+                            alertMessage.contains("timeout") -> "Сервер не отвечает"
+                            else -> result.exceptionOrNull()?.message?:"Ошибка"
+                        }
                         showAlert = true
                         isLoading = false
                     }
