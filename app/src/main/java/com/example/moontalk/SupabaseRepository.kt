@@ -16,9 +16,7 @@ class SupabaseRepository {
         }
         val userId = client.auth.currentUserOrNull()?.id
             ?: throw Exception("Failed to get user after login")
-        client.from("profiles").update(mapOf("is_online" to true)) {
-            filter { eq("id", userId) }
-        }
+        changeUserOnline(true)
         val profile = client.from("profiles").select {
             filter { eq("id", userId) }
         }.decodeSingleOrNull<Profile>()
@@ -26,6 +24,25 @@ class SupabaseRepository {
         Result.success(profile)
     } catch (e: Exception) {
         Result.failure(e)
+    }
+
+    suspend fun isUserLoggedIn() : Boolean {
+        return client.auth.currentUserOrNull() != null
+    }
+
+    suspend fun getProfile(): Result<Profile?> {
+        try {
+            var userId = client.auth.currentUserOrNull()?.id
+            if (userId != null) {
+                return Result.success(client.from("profiles").select() {
+                    filter { eq("id", userId) }
+                }.decodeSingleOrNull<Profile>())
+            } else {
+                return Result.failure(Exception("No userid found"))
+            }
+        }catch (e: Exception) {
+            return Result.failure(Exception(e.message))
+        }
     }
 
     suspend fun notOnlineAnymore(): Result<Unit> = try {
@@ -77,6 +94,22 @@ class SupabaseRepository {
             filter { eq("id", userId) }
         }
         return Result.success(Unit)
+    }
+
+    suspend fun changeUserOnline(flag: Boolean): Result<Unit> {
+        return try {
+            val userId = client.auth.currentUserOrNull()?.id
+            if (userId == null) {
+                return Result.failure(Exception ("User is not auth"))
+            }
+            client.from("profiles").update(mapOf("is_online" to flag)) {
+                filter { eq("id", userId) }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+
     }
 
     suspend fun startSearchCompanions() {

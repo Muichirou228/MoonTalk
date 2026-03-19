@@ -27,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.moontalk.ui.theme.MoonTalkTheme
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.gotrue.SessionStatus
+import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
@@ -40,101 +41,44 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         startService(Intent(this, ExitDetectionService::class.java))
-        //enableEdgeToEdge()
         setContent {
             MoonTalkTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
                     var isAuthenticated by remember { mutableStateOf(false) }
+                    var isLoading by remember {mutableStateOf(true)}
                     var showRegister by remember {mutableStateOf(false)}
-                    Crossfade(targetState = Pair(isAuthenticated, showRegister)) { (isAuth, isRegister) ->
-                        when {
-                            isAuth -> FindCompanions()
-                            isRegister -> MoonTalkRegistration({isAuthenticated = true},
-                                {showRegister = false})
-                            else -> MoonTalkSignIn({isAuthenticated = true},
-                                {showRegister = true})
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-@Composable
-fun MoonTalkSignIn(onAuthSuccess: () -> Unit,
-                   onNavigateToRegister: () -> Unit) {
-    var email by remember {mutableStateOf("")}
-    var password by remember {mutableStateOf("")}
-    var isLoading by remember {mutableStateOf(false)}
-    var scope = rememberCoroutineScope()
-    var showAlert by remember {mutableStateOf(false)}
-    var alertMessage by remember {mutableStateOf("")}
-    Column(modifier = Modifier.fillMaxSize().padding(top = 20.dp), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.End) {
-        Text("Нет аккаунта?", color = Color.White)
-        Text("Зарегистрироваться", fontWeight = FontWeight.ExtraBold, color = Color.White, textDecoration = TextDecoration.Underline, fontSize = 20.sp, modifier = Modifier.clickable(true){
-            onNavigateToRegister()
-        })
-    }
-    Column (modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.Center){
-        Row (modifier = Modifier.padding(bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text (text = "ВХОД", fontSize = 40.sp, color = Color.White, fontWeight = FontWeight.Bold)
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        OutlinedTextField(modifier = Modifier.fillMaxWidth().height(56.dp)
-            .border(color = Color.White, width = 3.dp)
-            ,
-            onValueChange = {newText -> email = newText},
-            value = email,
-            textStyle = TextStyle(color = Color.White),
-            placeholder = {Text(text = "Почта...", textAlign = TextAlign.Center, color = Color.White)})
-        Spacer(modifier = Modifier.height(20.dp))
-        OutlinedTextField(modifier = Modifier.fillMaxWidth().height(56.dp)
-            .border(color = Color.White, width = 3.dp)
-            ,
-            onValueChange = {newText -> password = newText},
-            value = password,
-            textStyle = TextStyle(color = Color.White),
-            placeholder = {Text(text = "Пароль...", textAlign = TextAlign.Center, color = Color.White)})
-        Spacer (modifier = Modifier.height(30.dp))
-        Button(onClick = {
-            scope.launch {
-                try {
+                    var profile by remember {mutableStateOf<Profile?>(null)}
                     var rep = SupabaseRepository()
-                    isLoading = true;
-                    var result = rep.signIn(email, password)
-                    if (result.isSuccess) {
-                        val profile = result.getOrNull()
-//                        alertMessage = profile!!.username
-//                        showAlert = true
-                        withContext(Dispatchers.Main) {
-                            //delay(1000) //!!!!!!!!
-                            isLoading = false
-                            onAuthSuccess()
-                        }
-                    } else {
-                        alertMessage = "Неправильно введены данные"
-                        showAlert = true
+                    LaunchedEffect(Unit) {
+                        var isLoggedIn = rep.isUserLoggedIn()
+                        isAuthenticated = isLoggedIn
+                        rep.changeUserOnline(isLoggedIn)
                         isLoading = false
                     }
-                } catch (e: Exception) {
-                    alertMessage = "${e.message}"
-                    showAlert = true
-                    isLoading = false
+                    LaunchedEffect(isAuthenticated) {
+                        if (isAuthenticated) {
+                            profile = rep.getProfile().getOrNull()
+                        }
+                    }
+                    if (isLoading) {
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Color(0xFF9C27B0))
+                        }
+                    } else {
+                        Crossfade(targetState = Pair(isAuthenticated, showRegister)) { (isAuth, isRegister) ->
+                            when {
+                                isAuth -> {
+                                    Menu(profile)
+                                }
+                                isRegister -> MoonTalkRegistration({isAuthenticated = true},
+                                    {showRegister = false})
+                                else -> MoonTalkSignIn({isAuthenticated = true},
+                                    {showRegister = true})
+                            }
+                        }
+                    }
                 }
             }
-        }, modifier = Modifier.width(200.dp).height(70.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF9C27B0),
-                contentColor = Color.White
-            ),
-            enabled = email != "" && password != "" && !isLoading) {
-            if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-            } else Text("Войти", fontSize = 26.sp)
         }
-    }
-    if (showAlert) {
-        MaterialAlert(alertMessage, onDismiss = {showAlert = false})
     }
 }

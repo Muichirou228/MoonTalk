@@ -41,7 +41,6 @@ import kotlinx.coroutines.launch
 fun FindCompanions(){
     val rep = SupabaseRepository()
     val task = rememberCoroutineScope()
-
     var seconds by remember { mutableStateOf(0) }
     var isSearching by remember { mutableStateOf(false) }
 
@@ -54,7 +53,6 @@ fun FindCompanions(){
             }
         }
     }
-
     Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Button (onClick = {
             task.launch {
