@@ -2,7 +2,9 @@ package com.example.moontalk
 
 import android.R
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,7 +42,11 @@ import kotlinx.serialization.json.jsonPrimitive
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        startService(Intent(this, ExitDetectionService::class.java))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(Intent(this, ExitDetectionService::class.java))
+        } else {
+            startService(Intent(this, ExitDetectionService::class.java))
+        }
         setContent {
             MoonTalkTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
@@ -50,6 +56,7 @@ class MainActivity : ComponentActivity() {
                     var profile by remember {mutableStateOf<Profile?>(null)}
                     var rep = SupabaseRepository()
                     LaunchedEffect(Unit) {
+                        //SupabaseClient.client.auth.signOut()
                         var isLoggedIn = rep.isUserLoggedIn()
                         isAuthenticated = isLoggedIn
                         rep.changeUserOnline(isLoggedIn)
