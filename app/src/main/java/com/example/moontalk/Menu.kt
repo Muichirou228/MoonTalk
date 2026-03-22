@@ -107,7 +107,7 @@ fun Menu(profile: Profile?) {
                 .background(Color.Black)
         ) {
             when (selectedTab) {
-                0 -> FindCompanions()
+                0 -> FindCompanions(profile)
                 1 -> Feedback()
                 2 -> Account(profile)
             }

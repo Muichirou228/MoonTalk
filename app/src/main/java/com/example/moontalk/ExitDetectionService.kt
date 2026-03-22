@@ -54,11 +54,11 @@ class ExitDetectionService : Service() {
             try {
                 authRepo.notOnlineAnymore()
                 Log.d("ExSer", "success")
+                stopSelf()
             } catch (e: Exception) {
                 Log.d("ExSer", "error, ${e.message}")
             }
         }
-        stopSelf()
     }
 
     override fun onDestroy() {

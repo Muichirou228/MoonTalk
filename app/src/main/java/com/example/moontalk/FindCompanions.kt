@@ -38,11 +38,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun FindCompanions(){
+fun FindCompanions(initialProfile: Profile?){
     val rep = SupabaseRepository()
+    var room by remember { mutableStateOf<Room?>(null) }
+    var myProfile by remember { mutableStateOf<Profile?>(initialProfile) }
+    var friendProfile by remember { mutableStateOf<Profile?>(null) }
     val task = rememberCoroutineScope()
     var seconds by remember { mutableStateOf(0) }
     var isSearching by remember { mutableStateOf(false) }
+    var showAlert by remember {mutableStateOf(false)}
+    var alertMessage by remember {mutableStateOf("")}
+    var showChat by remember {mutableStateOf(false)}
 
     LaunchedEffect(isSearching) {
         if (isSearching) {
@@ -53,41 +59,66 @@ fun FindCompanions(){
             }
         }
     }
-    Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Button (onClick = {
-            task.launch {
+    if (showChat) {
+        chat(myProfile, friendProfile, {showChat = false}, room)
+    } else {
+        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Button (onClick = {
+                task.launch {
+                    if (isSearching) {
+                        isSearching = false;
+                        rep.changeUserSearching(isSearching)
+                    } else {
+                        isSearching = true;
+                        rep.changeUserSearching(isSearching)
+                        while (isSearching){
+                            var result = rep.startSearchCompanions()
+                            if (result.isSuccess) {
+                                if (result.getOrNull() != null) {
+                                    friendProfile = result.getOrNull()
+                                    var result = rep.createRoom(myProfile, friendProfile)
+                                    if (result.isSuccess) {
+                                        room = result.getOrNull()
+                                    }
+                                    isSearching = false
+                                    rep.changeUserSearching(false)
+                                    showChat = true
+                                    break
+                                }
+                            } else {
+                                alertMessage = result.exceptionOrNull().toString()
+                                showAlert = true
+                            }
+                        }
+                    }
+                }
+            },
+                modifier = Modifier
+                    .size(160.dp)
+                    .aspectRatio(1f),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (!isSearching) Color(0xFF9C27B0) else Color.LightGray,
+                    contentColor = Color.White
+                )) {
+                Text(text = if (!isSearching) "Поиск" else "Отмена", textAlign = TextAlign.Center,
+                    fontSize = 30.sp)
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Box(
+                modifier = Modifier.height(50.dp),
+                contentAlignment = Alignment.Center
+            ) {
                 if (isSearching) {
-                    isSearching = false;
-                    rep.changeUserSearching(isSearching)
-                } else {
-                    isSearching = true;
-                    rep.changeUserSearching(isSearching)
-                    //rep.startSearchCompanions()
+                    Text(
+                        text = formatTime(seconds),
+                        color = Color.White,
+                        fontSize = 24.sp
+                    )
                 }
             }
-        },
-            modifier = Modifier
-                .size(160.dp)
-                .aspectRatio(1f),
-            shape = CircleShape,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (!isSearching) Color(0xFF9C27B0) else Color.LightGray,
-                contentColor = Color.White
-            )) {
-            Text(text = if (!isSearching) "Поиск" else "Отмена", textAlign = TextAlign.Center,
-                fontSize = 30.sp)
-        }
-        Spacer(modifier = Modifier.height(20.dp))
-        Box(
-            modifier = Modifier.height(50.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            if (isSearching) {
-                Text(
-                    text = formatTime(seconds),
-                    color = Color.White,
-                    fontSize = 24.sp
-                )
+            if (showAlert) {
+                MaterialAlert(alertMessage, {showAlert = false})
             }
         }
     }

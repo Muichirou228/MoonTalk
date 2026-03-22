@@ -1,5 +1,7 @@
 package com.example.moontalk
 
+import android.service.autofill.Validators.and
+import android.service.autofill.Validators.or
 import android.util.Log
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.from
@@ -112,8 +114,82 @@ class SupabaseRepository {
 
     }
 
-    suspend fun startSearchCompanions() {
+    suspend fun startSearchCompanions() : Result<Profile?> {
+        return try {
+            val userId = client.auth.currentUserOrNull()?.id
+            if (userId != null) {
+                Result.success(client.from("profiles").select(){
+                    filter { neq("id", userId)
+                        eq("is_online", true)
+                        eq ("is_searching", true)}
+                }.decodeSingleOrNull<Profile>())
+            } else {
+                return Result.failure(Exception("Userid not found"))
+            }
 
+        } catch(e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createRoom(profile1: Profile?, profile2: Profile?): Result<Room?> {
+        return try {
+            if (profile1 == null || profile2 == null) {
+                return Result.failure(Exception("Profiles cannot be null"))
+            }
+            val existingRoom = client.from("rooms")
+                .select() {
+                    filter {
+                        eq("user1_id", profile1.id)
+                        eq("user2_id", profile2.id)
+                    }
+                }
+                .decodeSingleOrNull<Room>()
+
+            if (existingRoom != null) {
+                return Result.success(existingRoom)
+            }
+            val existingRoomReverse = client.from("rooms")
+                .select() {
+                    filter { eq("user1_id", profile2.id)
+                        eq("user2_id", profile1.id)}
+                }
+                .decodeSingleOrNull<Room>()
+
+            if (existingRoomReverse != null) {
+                return Result.success(existingRoomReverse)
+            }
+
+            client.from("rooms")
+                .insert(
+                    mapOf(
+                        "user1_id" to profile1.id,
+                        "user2_id" to profile2.id
+                    )
+                )
+
+            var result = client.from("rooms").select { filter { eq("user1_id", profile1.id)
+            eq("user2_id", profile2.id)} }.decodeSingleOrNull<Room>()
+            if (result != null) {
+                Result.success(result)
+            } else {
+                result = client.from("rooms").select { filter { eq("user2_id", profile1.id)
+                    eq("user1_id", profile2.id)} }.decodeSingleOrNull<Room>()
+                Result.success(result)
+            }
+
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteRoom(roomId: String): Result<Unit> {
+        return try {
+            client.from("rooms").delete { filter { eq("id", roomId) } }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }
 
