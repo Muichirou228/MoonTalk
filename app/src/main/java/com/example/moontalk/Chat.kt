@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.ktor.websocket.Frame
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -27,6 +29,21 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
     var scope = rememberCoroutineScope()
     var showAlert by remember { mutableStateOf(false) }
     var alertMessage by remember {mutableStateOf("")}
+    LaunchedEffect(room?.id) {
+        if (room?.id != null) {
+            while (true){
+                delay(1000)
+                var exists = rep.checkRoomExists(room.id)
+                if (!exists){
+                    alertMessage = "Собеседник закончил диалог"
+                    showAlert = true
+                    delay (2000)
+                    onCloseChat()
+                    break
+                }
+            }
+        }
+    }
     Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
         Text(profile1?.username?:"Not found", color = Color.White)
         Spacer(Modifier.width(10.dp))

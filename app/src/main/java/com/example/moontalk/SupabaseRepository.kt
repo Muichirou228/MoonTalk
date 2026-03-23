@@ -6,6 +6,7 @@ import android.util.Log
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.gotrue.providers.builtin.Email
+import io.github.jan.supabase.postgrest.postgrest
 import kotlin.collections.mapOf
 
 
@@ -189,6 +190,20 @@ class SupabaseRepository {
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+    suspend fun checkRoomExists(roomId: String): Boolean {
+        return try {
+            val room = client.from("rooms")
+                .select() {
+                    filter {
+                        eq("id", roomId)
+                    }
+                }
+                .decodeSingleOrNull<Room>()
+            room != null
+        } catch (e: Exception) {
+            false
         }
     }
 }

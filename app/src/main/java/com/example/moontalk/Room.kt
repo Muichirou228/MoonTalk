@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Room(
     val id: String?,
-    val userId1: String?,
-    val userId2: String?,
+    val user1_id: String?,
+    val user2_id: String?,
     val created_at: String?
 )
