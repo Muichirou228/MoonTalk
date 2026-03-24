@@ -7,6 +7,7 @@ import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.gotrue.providers.builtin.Email
 import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.delay
 import kotlin.collections.mapOf
 
 
@@ -138,37 +139,16 @@ class SupabaseRepository {
             if (profile1 == null || profile2 == null) {
                 return Result.failure(Exception("Profiles cannot be null"))
             }
-            val existingRoom = client.from("rooms")
-                .select() {
-                    filter {
-                        eq("user1_id", profile1.id)
-                        eq("user2_id", profile2.id)
-                    }
-                }
-                .decodeSingleOrNull<Room>()
-
-            if (existingRoom != null) {
-                return Result.success(existingRoom)
-            }
-            val existingRoomReverse = client.from("rooms")
-                .select() {
-                    filter { eq("user1_id", profile2.id)
-                        eq("user2_id", profile1.id)}
-                }
-                .decodeSingleOrNull<Room>()
-
-            if (existingRoomReverse != null) {
-                return Result.success(existingRoomReverse)
-            }
-
-            client.from("rooms")
-                .insert(
-                    mapOf(
-                        "user1_id" to profile1.id,
-                        "user2_id" to profile2.id
+            var roomAlreadyExist = findExistingRooms(profile1, profile2).getOrNull()
+            if (roomAlreadyExist == null) {
+                client.from("rooms")
+                    .insert(
+                        mapOf(
+                            "user1_id" to profile1.id,
+                            "user2_id" to profile2.id
+                        )
                     )
-                )
-
+            }
             var result = client.from("rooms").select { filter { eq("user1_id", profile1.id)
             eq("user2_id", profile2.id)} }.decodeSingleOrNull<Room>()
             if (result != null) {
@@ -184,6 +164,32 @@ class SupabaseRepository {
         }
     }
 
+    suspend fun findExistingRooms(profile1: Profile?, profile2: Profile?): Result<Room?>{
+        val existingRoom = client.from("rooms")
+            .select() {
+                filter {
+                    eq("user1_id", profile1?.id.toString())
+                    eq("user2_id", profile2?.id.toString())
+                }
+            }
+            .decodeSingleOrNull<Room>()
+
+        if (existingRoom != null) {
+            return Result.success(existingRoom)
+        }
+        val existingRoomReverse = client.from("rooms")
+            .select() {
+                filter { eq("user1_id", profile2?.id.toString())
+                    eq("user2_id", profile1?.id.toString())}
+            }
+            .decodeSingleOrNull<Room>()
+
+        if (existingRoomReverse != null) {
+            return Result.success(existingRoomReverse)
+        }
+        return Result.success(null)
+    }
+
     suspend fun deleteRoom(roomId: String): Result<Unit> {
         return try {
             client.from("rooms").delete { filter { eq("id", roomId) } }
@@ -194,6 +200,7 @@ class SupabaseRepository {
     }
     suspend fun checkRoomExists(roomId: String): Boolean {
         return try {
+            Log.d("ExSer", "id room is ${roomId}")
             val room = client.from("rooms")
                 .select() {
                     filter {

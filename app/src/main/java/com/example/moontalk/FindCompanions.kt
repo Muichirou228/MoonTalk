@@ -20,6 +20,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ModifierLocalBeyondBoundsLayout
+import androidx.compose.ui.platform.DisableContentCapture
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,18 +40,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun FindCompanions(initialProfile: Profile?){
+fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boolean) -> Unit, searchStatus: Boolean){
     val rep = SupabaseRepository()
     var room by remember { mutableStateOf<Room?>(null) }
     var myProfile by remember { mutableStateOf<Profile?>(initialProfile) }
     var friendProfile by remember { mutableStateOf<Profile?>(null) }
     val task = rememberCoroutineScope()
     var seconds by remember { mutableStateOf(0) }
-    var isSearching by remember { mutableStateOf(false) }
+    var isSearching by remember { mutableStateOf(searchStatus) }
     var showAlert by remember {mutableStateOf(false)}
     var alertMessage by remember {mutableStateOf("")}
     var showChat by remember {mutableStateOf(false)}
-
+    var isActive by remember {mutableStateOf(true)}
+    DisposableEffect(Unit) {
+        onDispose {
+            isActive = false
+        }
+    }
     LaunchedEffect(isSearching) {
         if (isSearching) {
             seconds = 0
@@ -60,7 +67,8 @@ fun FindCompanions(initialProfile: Profile?){
         }
     }
     if (showChat) {
-        chat(myProfile, friendProfile, {showChat = false}, room)
+        chat(myProfile, friendProfile, {showChat = false
+                                       onSearchingChanged(false)}, room)
     } else {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Button (onClick = {
@@ -68,10 +76,13 @@ fun FindCompanions(initialProfile: Profile?){
                     if (isSearching) {
                         isSearching = false;
                         rep.changeUserSearching(isSearching)
+                        onSearchingChanged(false)
                     } else {
                         isSearching = true;
                         rep.changeUserSearching(isSearching)
+                        onSearchingChanged(true)
                         while (isSearching){
+                            if (!isActive) break
                             var result = rep.startSearchCompanions()
                             if (result.isSuccess) {
                                 if (result.getOrNull() != null) {

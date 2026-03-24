@@ -53,6 +53,7 @@ class ExitDetectionService : Service() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 authRepo.notOnlineAnymore()
+
                 Log.d("ExSer", "success")
                 stopSelf()
             } catch (e: Exception) {

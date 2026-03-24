@@ -1,5 +1,6 @@
 package com.example.moontalk
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,21 +30,26 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
     var scope = rememberCoroutineScope()
     var showAlert by remember { mutableStateOf(false) }
     var alertMessage by remember {mutableStateOf("")}
+    var localRoom by remember {mutableStateOf<Room?>(room)}
     LaunchedEffect(room?.id) {
         if (room?.id != null) {
             while (true){
                 delay(1000)
-                var exists = rep.checkRoomExists(room.id)
+                var exists = rep.checkRoomExists(localRoom?.id.toString())
                 if (!exists){
+                    Log.d("ExSer", "Room doesnt exist")
                     alertMessage = "Собеседник закончил диалог"
                     showAlert = true
                     delay (2000)
                     onCloseChat()
                     break
+                } else {
+                    Log.d("ExSer", "Room exists")
                 }
             }
         }
     }
+
     Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
         Text(profile1?.username?:"Not found", color = Color.White)
         Spacer(Modifier.width(10.dp))

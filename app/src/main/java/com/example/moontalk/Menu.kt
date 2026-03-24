@@ -1,6 +1,12 @@
 package com.example.moontalk
 
 import androidx.annotation.NavigationRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,73 +35,80 @@ import kotlinx.coroutines.launch
 @Composable
 fun Menu(profile: Profile?) {
     var selectedTab by remember { mutableStateOf(0) }
-    var rep = SupabaseRepository()
-    var scope = rememberCoroutineScope()
+    var isSearching by remember {mutableStateOf(false)}
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                containerColor = Color.Black,
-                contentColor = Color.White
+            AnimatedVisibility(
+                visible = !isSearching,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeIn(animationSpec = tween(300)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(300)
+                ) + fadeOut(animationSpec = tween(300))
             ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = "Поиск",
-                            tint = if (selectedTab == 0) Color(0xFF9C27B0) else Color.White
-                        )
-                    },
-                    label = {
-                        Text(
-                            "Поиск",
-                            color = if (selectedTab == 0) Color(0xFF9C27B0) else Color.White
-                        )
-                    }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = {
-                        scope.launch {
-                            rep.changeUserSearching(false)
-                        }
-                        selectedTab = 1 },
-                    icon = {
-                        Icon(
-                            Icons.AutoMirrored.Filled.List,
-                            contentDescription = "Фидбэк",
-                            tint = if (selectedTab == 1) Color(0xFF9C27B0) else Color.White
-                        )
-                    },
-                    label = {
-                        Text(
-                            "Фидбэки",
-                            color = if (selectedTab == 1) Color(0xFF9C27B0) else Color.White
-                        )
-                    }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = {
-                        scope.launch {
-                            rep.changeUserSearching(false)
-                        }
-                        selectedTab = 2 },
-                    icon = {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = "Фидбэк",
-                            tint = if (selectedTab == 2) Color(0xFF9C27B0) else Color.White
-                        )
-                    },
-                    label = {
-                        Text(
-                            "Профиль",
-                            color = if (selectedTab == 2) Color(0xFF9C27B0) else Color.White
-                        )
-                    }
-                )
+                NavigationBar(containerColor = Color.Black) {  // ← добавить NavigationBar
+                    NavigationBarItem(
+                        selected = selectedTab == 0,
+                        onClick = { if (!isSearching) selectedTab = 0 },
+                        icon = {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = "Поиск",
+                                tint = if (selectedTab == 0) Color(0xFF9C27B0) else Color.White
+                            )
+                        },
+                        label = {
+                            Text(
+                                "Поиск",
+                                color = if (selectedTab == 0) Color(0xFF9C27B0) else Color.White
+                            )
+                        },
+                        enabled = !isSearching
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 1,
+                        onClick = {
+                            if (!isSearching) selectedTab = 1
+                        },
+                        icon = {
+                            Icon(
+                                Icons.AutoMirrored.Filled.List,
+                                contentDescription = "Фидбэк",
+                                tint = if (selectedTab == 1) Color(0xFF9C27B0) else Color.White
+                            )
+                        },
+                        label = {
+                            Text(
+                                "Фидбэки",
+                                color = if (selectedTab == 1) Color(0xFF9C27B0) else Color.White
+                            )
+                        },
+                        enabled = !isSearching
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = {
+                            if (!isSearching) selectedTab = 2
+                        },
+                        icon = {
+                            Icon(
+                                Icons.Default.Person,
+                                contentDescription = "Профиль",
+                                tint = if (selectedTab == 2) Color(0xFF9C27B0) else Color.White
+                            )
+                        },
+                        label = {
+                            Text(
+                                "Профиль",
+                                color = if (selectedTab == 2) Color(0xFF9C27B0) else Color.White
+                            )
+                        },
+                        enabled = !isSearching
+                    )
+                }
             }
         },
         containerColor = Color.Black
@@ -107,7 +120,11 @@ fun Menu(profile: Profile?) {
                 .background(Color.Black)
         ) {
             when (selectedTab) {
-                0 -> FindCompanions(profile)
+                0 -> FindCompanions(
+                    initialProfile = profile,
+                    onSearchingChanged = { searching -> isSearching = searching },
+                    searchStatus = isSearching
+                )
                 1 -> Feedback()
                 2 -> Account(profile)
             }
