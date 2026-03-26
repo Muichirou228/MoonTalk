@@ -40,14 +40,16 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
                     Log.d("ExSer", "Room doesnt exist")
                     alertMessage = "Собеседник закончил диалог"
                     showAlert = true
-                    delay (2000)
+                    delay (1000)
                     onCloseChat()
                     break
-                } else {
-                    Log.d("ExSer", "Room exists")
                 }
             }
         }
+    }
+    LaunchedEffect(Unit) {
+        alertMessage = "Room id is ${localRoom?.id}"
+        showAlert = true
     }
 
     Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {

@@ -67,8 +67,10 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
         }
     }
     if (showChat) {
+        AppState.currentRoomId = room?.id
         chat(myProfile, friendProfile, {showChat = false
-                                       onSearchingChanged(false)}, room)
+                                       onSearchingChanged(false)
+            AppState.currentRoomId = null}, room)
     } else {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Button (onClick = {
@@ -91,6 +93,7 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
                                     if (result.isSuccess) {
                                         room = result.getOrNull()
                                     }
+                                    room = rep.deleteDuplicateRoom(myProfile, friendProfile).getOrNull()
                                     isSearching = false
                                     rep.changeUserSearching(false)
                                     showChat = true

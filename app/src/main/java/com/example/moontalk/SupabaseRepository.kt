@@ -150,7 +150,7 @@ class SupabaseRepository {
                     )
             }
             var result = client.from("rooms").select { filter { eq("user1_id", profile1.id)
-            eq("user2_id", profile2.id)} }.decodeSingleOrNull<Room>()
+                eq("user2_id", profile2.id)} }.decodeSingleOrNull<Room>()
             if (result != null) {
                 Result.success(result)
             } else {
@@ -161,6 +161,52 @@ class SupabaseRepository {
 
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun deleteDuplicateRoom(profile1: Profile?, profile2: Profile?) : Result<Room?>{
+        try {
+            val firstId = if (profile1?.id.toString() < profile2?.id.toString()) profile1?.id else profile2?.id
+            val secondId = if (profile1?.id.toString() < profile2?.id.toString()) profile2?.id else profile1?.id
+
+            val room1 = client.from("rooms")
+                .select() {
+                    filter {
+                        eq("user1_id", firstId.toString())
+                        eq("user2_id", secondId.toString())
+                    }
+                }
+                .decodeSingleOrNull<Room>()
+
+            val room2 = client.from("rooms")
+                .select() {
+                    filter {
+                        eq("user1_id", secondId.toString())
+                        eq("user2_id", firstId.toString())
+                    }
+                }
+                .decodeSingleOrNull<Room>()
+
+            if (room1 != null && room2 != null) {
+                Log.d("ExSer", "BOTH ROOMS FOUND ${room1.id} and ${room2.id}")
+                client.from("rooms").delete() {
+                        filter { eq("id", room1.id.toString()) }
+                    }
+                Log.d("ExSer", "Deleted ${room1.id}, returning ${room2.id}")
+                return Result.success(room2)
+            }
+            if (room1 != null) {
+                Log.d("ExSer", "Found only one room ${room1.id}")
+                return Result.success(room1)
+            }
+            if (room2 != null) {
+                Log.d("ExSer", "Found only one room ${room2.id}")
+                return Result.success(room2)
+            }
+            Log.d("ExSer", "No rooms found")
+            return Result.failure(Exception("No rooms found"))
+        } catch (e: Exception) {
+            return Result.failure(e)
         }
     }
 

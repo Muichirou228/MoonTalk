@@ -53,7 +53,10 @@ class ExitDetectionService : Service() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 authRepo.notOnlineAnymore()
-
+                var currentRoomId = AppState.currentRoomId
+                if (currentRoomId != null) {
+                    authRepo.deleteRoom(currentRoomId)
+                }
                 Log.d("ExSer", "success")
                 stopSelf()
             } catch (e: Exception) {

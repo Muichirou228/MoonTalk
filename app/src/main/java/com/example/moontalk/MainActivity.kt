@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         } else {
             startService(Intent(this, ExitDetectionService::class.java))
         }
+        AppState.currentRoomId = null
         setContent {
             MoonTalkTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
