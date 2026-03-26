@@ -30,6 +30,7 @@ import com.example.moontalk.ui.theme.MoonTalkTheme
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.gotrue.SessionStatus
 import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.gotrue.SignOutScope
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
@@ -52,12 +53,12 @@ class MainActivity : ComponentActivity() {
             MoonTalkTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
                     var isAuthenticated by remember { mutableStateOf(false) }
+                    var scope = rememberCoroutineScope()
                     var isLoading by remember {mutableStateOf(true)}
                     var showRegister by remember {mutableStateOf(false)}
                     var profile by remember {mutableStateOf<Profile?>(null)}
                     var rep = SupabaseRepository()
                     LaunchedEffect(Unit) {
-                        //SupabaseClient.client.auth.signOut()
                         var isLoggedIn = rep.isUserLoggedIn()
                         isAuthenticated = isLoggedIn
                         rep.changeUserOnline(isLoggedIn)
@@ -76,7 +77,12 @@ class MainActivity : ComponentActivity() {
                         Crossfade(targetState = Pair(isAuthenticated, showRegister)) { (isAuth, isRegister) ->
                             when {
                                 isAuth -> {
-                                    Menu(profile)
+                                    Menu(profile, {
+                                        isAuthenticated = false
+                                        scope.launch {
+                                            SupabaseClient.client.auth.signOut()
+                                        }
+                                    })
                                 }
                                 isRegister -> MoonTalkRegistration({isAuthenticated = true},
                                     {showRegister = false})

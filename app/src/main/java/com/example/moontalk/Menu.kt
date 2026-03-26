@@ -33,7 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
-fun Menu(profile: Profile?) {
+fun Menu(profile: Profile?, onLogOut: () -> Unit) {
     var selectedTab by remember { mutableStateOf(0) }
     var isSearching by remember {mutableStateOf(false)}
     Scaffold(
@@ -126,7 +126,7 @@ fun Menu(profile: Profile?) {
                     searchStatus = isSearching
                 )
                 1 -> Feedback()
-                2 -> Account(profile)
+                2 -> Account(profile, onLogOut)
             }
         }
     }

@@ -259,5 +259,16 @@ class SupabaseRepository {
             false
         }
     }
+
+    suspend fun updateUserLanguage(language: String): Result<Unit> {
+        try {
+            client.from("profiles").update(mapOf("learning_language" to language)){
+                filter { eq("id", client.auth.currentUserOrNull()?.id.toString()) }
+            }
+            return Result.success(Unit)
+        }catch (e:Exception) {
+            return Result.failure(e)
+        }
+    }
 }
 
