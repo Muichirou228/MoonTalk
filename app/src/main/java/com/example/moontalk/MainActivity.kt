@@ -61,7 +61,10 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         var isLoggedIn = rep.isUserLoggedIn()
                         isAuthenticated = isLoggedIn
-                        rep.changeUserOnline(isLoggedIn)
+                        if (isLoggedIn) {
+                            rep.changeUserSearching(false)
+                            rep.changeUserOnline(isLoggedIn)
+                        }
                         isLoading = false
                     }
                     LaunchedEffect(isAuthenticated) {

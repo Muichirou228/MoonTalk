@@ -80,7 +80,6 @@ fun MoonTalkSignIn(onAuthSuccess: () -> Unit,
                     isLoading = true;
                     var result = rep.signIn(email, password)
                     if (result.isSuccess) {
-                        val profile = result.getOrNull()
 //                        alertMessage = profile!!.username
 //                        showAlert = true
                         withContext(Dispatchers.Main) {
