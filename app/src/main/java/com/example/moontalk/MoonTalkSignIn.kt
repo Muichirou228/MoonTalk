@@ -45,7 +45,7 @@ fun MoonTalkSignIn(onAuthSuccess: () -> Unit,
     var scope = rememberCoroutineScope()
     var showAlert by remember {mutableStateOf(false)}
     var alertMessage by remember {mutableStateOf("")}
-    Column(modifier = Modifier.fillMaxSize().padding(top = 20.dp), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.End) {
+    Column(modifier = Modifier.fillMaxSize().padding(top = 10.dp), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.End) {
         Text("Нет аккаунта?", color = Color.White)
         Text("Зарегистрироваться", fontWeight = FontWeight.ExtraBold, color = Color.White, textDecoration = TextDecoration.Underline, fontSize = 20.sp, modifier = Modifier.clickable(true){
             onNavigateToRegister()
