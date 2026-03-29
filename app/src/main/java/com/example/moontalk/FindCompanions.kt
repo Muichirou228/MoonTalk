@@ -36,6 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.moontalk.ui.theme.MoonTalkTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -52,6 +54,29 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
     var alertMessage by remember {mutableStateOf("")}
     var showChat by remember {mutableStateOf(false)}
     var isActive by remember {mutableStateOf(true)}
+    suspend fun currentlySearchingForCompanion(){
+        while (isSearching){
+            if (!isActive) break
+            var result = rep.startSearchCompanions()
+            if (result.isSuccess) {
+                if (result.getOrNull() != null) {
+                    friendProfile = result.getOrNull()
+                    var result = rep.createRoom(myProfile, friendProfile)
+                    if (result.isSuccess) {
+                        room = result.getOrNull()
+                    }
+                    room = rep.deleteDuplicateRoom(myProfile, friendProfile).getOrNull()
+                    isSearching = false
+                    rep.changeUserSearching(false)
+                    showChat = true
+                    break
+                }
+            } else {
+                alertMessage = result.exceptionOrNull().toString()
+                showAlert = true
+            }
+        }
+    }
     DisposableEffect(Unit) {
         onDispose {
             isActive = false
@@ -70,7 +95,15 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
         AppState.currentRoomId = room?.id
         chat(myProfile, friendProfile, {showChat = false
                                        onSearchingChanged(false)
-            AppState.currentRoomId = null}, room)
+            AppState.currentRoomId = null}, room, {
+                showChat = false
+                isSearching = true
+                onSearchingChanged(true)
+            CoroutineScope(Dispatchers.IO).launch {
+                rep.changeUserSearching(true)
+                currentlySearchingForCompanion()
+            }
+        })
     } else {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Button (onClick = {
@@ -83,27 +116,7 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
                         isSearching = true;
                         rep.changeUserSearching(isSearching)
                         onSearchingChanged(true)
-                        while (isSearching){
-                            if (!isActive) break
-                            var result = rep.startSearchCompanions()
-                            if (result.isSuccess) {
-                                if (result.getOrNull() != null) {
-                                    friendProfile = result.getOrNull()
-                                    var result = rep.createRoom(myProfile, friendProfile)
-                                    if (result.isSuccess) {
-                                        room = result.getOrNull()
-                                    }
-                                    room = rep.deleteDuplicateRoom(myProfile, friendProfile).getOrNull()
-                                    isSearching = false
-                                    rep.changeUserSearching(false)
-                                    showChat = true
-                                    break
-                                }
-                            } else {
-                                alertMessage = result.exceptionOrNull().toString()
-                                showAlert = true
-                            }
-                        }
+                        currentlySearchingForCompanion()
                     }
                 }
             },
@@ -142,3 +155,4 @@ fun formatTime(totalSeconds: Int): String {
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
 }
+
