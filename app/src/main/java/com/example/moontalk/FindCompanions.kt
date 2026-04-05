@@ -57,7 +57,7 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
     suspend fun currentlySearchingForCompanion(){
         while (isSearching){
             if (!isActive) break
-            var result = rep.startSearchCompanions()
+            var result = rep.startSearchCompanions(myProfile)
             if (result.isSuccess) {
                 if (result.getOrNull() != null) {
                     friendProfile = result.getOrNull()

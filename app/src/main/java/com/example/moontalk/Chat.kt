@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -41,19 +44,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.jan.supabase.gotrue.auth
 import io.ktor.websocket.Frame
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 import java.time.format.TextStyle
+import kotlin.collections.mutableListOf
+import kotlin.uuid.Uuid
 
 @Composable
 fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: Room?, onFindNewCompanion: () -> Unit) {
     val rep = SupabaseRepository()
     var scope = rememberCoroutineScope()
     var showAlert by remember { mutableStateOf(false) }
+    var currentUserId = SupabaseClient.client.auth.currentUserOrNull()?.id
+    var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
+    val listState = rememberLazyListState()
     var alertMessage by remember {mutableStateOf("")}
     var localRoom by remember {mutableStateOf<Room?>(room)}
     var messageText by remember { mutableStateOf("") }
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
     LaunchedEffect(room?.id) {
         if (room?.id != null) {
             while (true){
@@ -70,9 +85,38 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             }
         }
     }
+
+    LaunchedEffect(room?.id) {
+        if (room?.id != null) {
+            while (true) {
+                val newMessages = rep.listenForNewMessages(room.id)
+                if (newMessages != messages) {
+                    messages = newMessages
+                }
+                delay(2000)
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         alertMessage = "Room id is ${localRoom?.id}"
         showAlert = true
+    }
+
+    fun sendMessage(){
+        if (messageText.isNotBlank() && SupabaseClient.client.auth.currentUserOrNull()?.id != null && room?.id != null) {
+            val newMessage = Message(
+                id = null,
+                room_id = room.id,
+                user_id = profile1?.id,
+                content = messageText,
+                created_at = null
+            )
+            scope.launch {
+                Log.d("Chat", "SENDING")
+                rep.sendMessage(newMessage)
+            }
+            messageText = ""
+        }
     }
 
     Column (Modifier.fillMaxSize().background(Color.Black)) {
@@ -82,6 +126,7 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
                     scope.launch {
                         if (room?.id != null) {
                             rep.deleteRoom(room.id)
+                            rep.deleteAllMessagesFromRoom(room.id)
                             onCloseChat()
                         } else {
                             alertMessage = "ROOM ID IS NULL"
@@ -129,6 +174,7 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
                         scope.launch {
                             if (room?.id != null) {
                                 rep.deleteRoom(room.id)
+                                rep.deleteAllMessagesFromRoom(room.id)
                                 onCloseChat()
                                 onFindNewCompanion()
                             } else {
@@ -159,17 +205,19 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             thickness = 1.dp
         )
 
-        Box(
+        LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentAlignment = Alignment.Center
+            reverseLayout = false,
+            state = listState
         ) {
-            Text(
-                text = "Сообщения будут здесь",
-                color = Color.White.copy(alpha = 0.5f),
-                fontSize = 16.sp
-            )
+            items(messages) { message ->
+                MessageBubble(
+                    message = message,
+                    isMyMessage = message.user_id == currentUserId
+                )
+            }
         }
 
         Divider(
@@ -205,9 +253,8 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             IconButton(
                 onClick = {
                     if (messageText.isNotBlank()) {
-                        // TODO: Отправить сообщение
-                        Log.d("Chat", "Sending message: $messageText")
-                        messageText = ""
+                        Log.d("Chat", "Sending message ${messageText}")
+                        sendMessage()
                     }
                 },
                 modifier = Modifier

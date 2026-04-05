@@ -56,6 +56,7 @@ class ExitDetectionService : Service() {
                 var currentRoomId = AppState.currentRoomId
                 if (currentRoomId != null) {
                     authRepo.deleteRoom(currentRoomId)
+                    authRepo.deleteAllMessagesFromRoom(currentRoomId)
                 }
                 Log.d("ExSer", "success")
                 stopSelf()

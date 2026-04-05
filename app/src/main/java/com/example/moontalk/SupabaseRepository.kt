@@ -116,14 +116,22 @@ class SupabaseRepository {
 
     }
 
-    suspend fun startSearchCompanions() : Result<Profile?> {
+    suspend fun getUserLanguage(profile: Profile?): Profile? {
+        return client.from("profiles").select{
+            filter { eq("id", profile?.id?:"") }
+        }.decodeSingleOrNull<Profile>()
+    }
+
+    suspend fun startSearchCompanions(profile: Profile?) : Result<Profile?> {
         return try {
-            val userId = client.auth.currentUserOrNull()?.id
-            if (userId != null) {
+            var language = getUserLanguage(profile)?.learning_language
+            if (profile?.id != null) {
                 Result.success(client.from("profiles").select(){
-                    filter { neq("id", userId)
+                    filter { neq("id", profile?.id?:"")
                         eq("is_online", true)
-                        eq ("is_searching", true)}
+                        eq ("is_searching", true)
+                        eq("learning_language", language?:"")
+                    }
                 }.decodeSingleOrNull<Profile>())
             } else {
                 return Result.failure(Exception("Userid not found"))
@@ -268,6 +276,41 @@ class SupabaseRepository {
             return Result.success(Unit)
         }catch (e:Exception) {
             return Result.failure(e)
+        }
+    }
+
+    suspend fun sendMessage(message: Message): Result<Unit> {
+        try {
+            client.from("messages").insert(
+                mapOf("room_id" to message.room_id,
+                    "user_id" to message.user_id,
+                    "content" to message.content,
+                    )
+            )
+            Log.d("Chat", "INSERTED")
+            return Result.success(Unit)
+        } catch(e: Exception){
+            Log.d("Chat", "Exception ${e.message}")
+            return Result.failure(e)
+        }
+    }
+
+    suspend fun listenForNewMessages(room_id: String): List<Message> {
+        try {
+            return client.from("messages").select {
+                filter { eq("room_id", room_id)}
+            }.decodeList<Message>()
+        } catch(e: Exception) {
+            Log.d("Chat", "Exception while listening ${e.message}")
+            return emptyList()
+        }
+    }
+
+    suspend fun deleteAllMessagesFromRoom(room_id:String) {
+        try {
+            client.from("messages").delete { filter { eq("room_id", room_id) } }
+        }catch (e: Exception) {
+            Log.d("Chat", "Exception while deleting ${e.message}")
         }
     }
 }

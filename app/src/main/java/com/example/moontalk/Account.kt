@@ -45,7 +45,7 @@ fun Account(profile: Profile?, onLogout: () -> Unit) {
     val scope = rememberCoroutineScope()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isDropMenuDropped by remember { mutableStateOf(false) }
-    var selectedLanguage by remember { mutableStateOf(profile?.learning_language ?: "en") }
+    var selectedLanguage by remember { mutableStateOf("Загрузка...") }
     var isUpdatingLanguage by remember { mutableStateOf(false) }
     var showMaterialAlert by remember { mutableStateOf(false) }
     val languages = listOf(
@@ -53,6 +53,11 @@ fun Account(profile: Profile?, onLogout: () -> Unit) {
         "Итальянский", "Португальский", "Китайский", "Японский",
         "Корейский"
     )
+    LaunchedEffect(Unit) {
+        scope.launch {
+            selectedLanguage = rep.getUserLanguage(profile)?.learning_language?:""
+        }
+    }
     Column(modifier = Modifier.fillMaxSize().padding(20.dp).background(Color.Black)) {
         Row(
             modifier = Modifier.fillMaxWidth().background(Color.Black),
@@ -130,7 +135,7 @@ fun Account(profile: Profile?, onLogout: () -> Unit) {
                         textStyle = TextStyle(color = Color.White),
                         placeholder = {
                             Text(
-                                text = "Английский",
+                                text = selectedLanguage,
                                 textAlign = TextAlign.Center,
                                 color = Color.White,
                                 fontSize = 20.sp
