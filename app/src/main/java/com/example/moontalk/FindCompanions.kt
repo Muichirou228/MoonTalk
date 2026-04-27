@@ -1,5 +1,6 @@
 package com.example.moontalk
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -42,7 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boolean) -> Unit, searchStatus: Boolean){
+fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boolean) -> Unit, searchStatus: Boolean, context: Context){
     val rep = SupabaseRepository()
     var room by remember { mutableStateOf<Room?>(null) }
     var myProfile by remember { mutableStateOf<Profile?>(initialProfile) }
@@ -103,7 +104,8 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
                 rep.changeUserSearching(true)
                 currentlySearchingForCompanion()
             }
-        })
+        },
+            context = context)
     } else {
         Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Button (onClick = {

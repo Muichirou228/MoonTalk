@@ -3,11 +3,10 @@ package com.example.moontalk
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Message (
+data class VoiceMessage (
     val id: String?,
-    val room_id: String?,
     val user_id: String?,
-    val content: String?,
+    val audio_url: String?,
+    val transcript: String?,
     val created_at: String?,
-    val audio_message_id: String?
 )

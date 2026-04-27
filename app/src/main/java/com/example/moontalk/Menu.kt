@@ -1,5 +1,6 @@
 package com.example.moontalk
 
+import android.content.Context
 import androidx.annotation.NavigationRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -33,7 +34,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
-fun Menu(profile: Profile?, onLogOut: () -> Unit) {
+fun Menu(profile: Profile?, onLogOut: () -> Unit, context: Context) {
     var selectedTab by remember { mutableStateOf(0) }
     var isSearching by remember {mutableStateOf(false)}
     Scaffold(
@@ -123,7 +124,8 @@ fun Menu(profile: Profile?, onLogOut: () -> Unit) {
                 0 -> FindCompanions(
                     initialProfile = profile,
                     onSearchingChanged = { searching -> isSearching = searching },
-                    searchStatus = isSearching
+                    searchStatus = isSearching,
+                    context = context
                 )
                 1 -> Feedback()
                 2 -> Account(profile, onLogOut)

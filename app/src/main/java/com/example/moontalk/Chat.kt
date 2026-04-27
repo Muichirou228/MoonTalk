@@ -1,7 +1,13 @@
 package com.example.moontalk
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Paint
+import android.os.Build
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,6 +28,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
@@ -40,21 +48,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import io.github.jan.supabase.gotrue.auth
 import io.ktor.websocket.Frame
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import java.io.File
 import java.time.format.TextStyle
 import kotlin.collections.mutableListOf
 import kotlin.uuid.Uuid
 
+
 @Composable
-fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: Room?, onFindNewCompanion: () -> Unit) {
+fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: Room?, onFindNewCompanion: () -> Unit, context: Context) {
     val rep = SupabaseRepository()
     var scope = rememberCoroutineScope()
     var showAlert by remember { mutableStateOf(false) }
@@ -64,6 +76,21 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
     var alertMessage by remember {mutableStateOf("")}
     var localRoom by remember {mutableStateOf<Room?>(room)}
     var messageText by remember { mutableStateOf("") }
+    var isRecording by remember { mutableStateOf(false) }
+    var makingAudioMessage by remember { mutableStateOf(false) }
+    var audioRecorderManager by remember { mutableStateOf<AudioRecorderManager?>(null) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // Разрешение получено, можно начинать запись
+        } else {
+            alertMessage = "Нужно разрешение на запись аудио"
+            showAlert = true
+        }
+    }
+
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -102,6 +129,10 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
         showAlert = true
     }
 
+    LaunchedEffect(Unit) {
+        audioRecorderManager = AudioRecorderManager(context)
+1    }
+
     fun sendMessage(){
         if (messageText.isNotBlank() && SupabaseClient.client.auth.currentUserOrNull()?.id != null && room?.id != null) {
             val newMessage = Message(
@@ -109,7 +140,8 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
                 room_id = room.id,
                 user_id = profile1?.id,
                 content = messageText,
-                created_at = null
+                created_at = null,
+                audio_message_id = null
             )
             scope.launch {
                 Log.d("Chat", "SENDING")
@@ -118,7 +150,26 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             messageText = ""
         }
     }
+    fun sendVoiceMessage(audioFile: File?) {
+        if (room?.id != null && profile1?.id != null) {
+            scope.launch {
+                makingAudioMessage = true
 
+                val result = rep.sendVoiceMessageWithFile(
+                    roomId = room.id,
+                    userId = profile1.id,
+                    audioFile = audioFile
+                )
+
+                if (result.isFailure) {
+                    alertMessage = result.exceptionOrNull()?.message ?: "Ошибка отправки"
+                    showAlert = true
+                }
+
+                makingAudioMessage = false
+            }
+        }
+    }
     Column (Modifier.fillMaxSize().background(Color.Black)) {
         Row (Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column (horizontalAlignment = Alignment.CenterHorizontally) {
@@ -261,9 +312,41 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF9C27B0)),
-                enabled = messageText.isNotBlank()
+                enabled = messageText.isNotBlank() && !isRecording
             ) {
                 Icon(imageVector = Icons.Default.Send, contentDescription = "Отправить", tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+            Spacer (Modifier.width(5.dp))
+            IconButton(
+                onClick = {
+                    if (isRecording) {
+                        val audioFile = audioRecorderManager?.stopRecording()
+                        isRecording = false
+                        Log.d("AUDIOOO", audioFile?.absolutePath.toString())
+                        sendVoiceMessage(audioFile)
+                    } else {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            if (ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO
+                                ) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                return@IconButton
+                            }
+                        }
+                        val success = audioRecorderManager?.startRecording() == true
+                        if (success) {
+                            isRecording = true
+                        } else {
+                            alertMessage = "Не удалось начать запись"
+                            showAlert = true
+                        }
+                    }
+                },
+                modifier = Modifier.size(48.dp).clip(CircleShape).background(if (isRecording) Color.Red else Color(0xFF9C27B0))
+            ) {
+                Icon (imageVector = if (isRecording) Icons.Default.Close else Icons.Default.Call, contentDescription = "GS", tint = Color.White, modifier = Modifier.size(24.dp))
             }
         }
     }

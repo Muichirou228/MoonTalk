@@ -86,7 +86,8 @@ class MainActivity : ComponentActivity() {
                                         scope.launch {
                                             SupabaseClient.client.auth.signOut()
                                         }
-                                    })
+                                    },
+                                        context = this)
                                 }
                                 isRegister -> MoonTalkRegistration({isAuthenticated = true},
                                     {showRegister = false})

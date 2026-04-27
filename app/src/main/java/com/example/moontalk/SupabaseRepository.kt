@@ -7,7 +7,9 @@ import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.gotrue.providers.builtin.Email
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.delay
+import java.io.File
 import kotlin.collections.mapOf
 
 
@@ -313,5 +315,55 @@ class SupabaseRepository {
             Log.d("Chat", "Exception while deleting ${e.message}")
         }
     }
+
+    suspend fun sendVoiceMessageWithFile(roomId: String, userId: String, audioFile: File?): Result<Unit> {
+        return try {
+            val fileName = "voice_${System.currentTimeMillis()}.m4a"
+            val path = "voice_messages/$roomId/$fileName"
+            if (audioFile != null) {
+                client.storage.from("voice_bucket")
+                    .upload(path, audioFile.readBytes())
+            } else {
+                throw Exception("AUDIO FILE IS NULL")
+            }
+
+            val audioUrl = client.storage.from("voice_bucket").publicUrl(path)
+
+            client.from("voice_messages")
+                .insert(
+                    mapOf(
+                        "user_id" to userId,
+                        "audio_url" to audioUrl,
+                        "created_at" to System.currentTimeMillis()
+                    )
+                )
+
+            val voiceMessage = client.from("voice_messages")
+                .select() {
+                    filter { eq("audio_url", audioUrl) }
+                }
+                .decodeSingle<VoiceMessageResponse>()
+
+            Log.d("AUDIOOO", "voice id is ${voiceMessage.id}")
+            client.from("messages").insert(
+                mapOf(
+                    "room_id" to roomId,
+                    "user_id" to userId,
+                    "audio_message_id" to voiceMessage.id,
+                    "created_at" to System.currentTimeMillis()
+                )
+            )
+
+            audioFile?.delete()
+
+            Log.d("AUDIOOO", "Voice message sent successfully")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("AUDIOOO", "Error: ${e.message}")
+            Result.failure(e)
+        }
+    }
 }
+
+
 
