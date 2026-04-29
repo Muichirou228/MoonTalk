@@ -157,7 +157,7 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
 
                 val result = rep.sendVoiceMessageWithFile(
                     roomId = room.id,
-                    userId = profile1.id,
+                    userId = profile1?.id,
                     audioFile = audioFile
                 )
 

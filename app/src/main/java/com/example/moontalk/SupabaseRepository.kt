@@ -316,7 +316,7 @@ class SupabaseRepository {
         }
     }
 
-    suspend fun sendVoiceMessageWithFile(roomId: String, userId: String, audioFile: File?): Result<Unit> {
+    suspend fun sendVoiceMessageWithFile(roomId: String, userId: String?, audioFile: File?): Result<Unit> {
         return try {
             val fileName = "voice_${System.currentTimeMillis()}.m4a"
             val path = "voice_messages/$roomId/$fileName"
@@ -326,31 +326,31 @@ class SupabaseRepository {
             } else {
                 throw Exception("AUDIO FILE IS NULL")
             }
-
+            Log.d("AUDIOOO", "uploaded file in bucket")
             val audioUrl = client.storage.from("voice_bucket").publicUrl(path)
-
+            Log.d("AUDIOOO", "took file from bucket, ${audioUrl}, inserting in table with data ${userId}, ${roomId}")
+            var VM = VoiceMessage(user_id = userId, audio_url = audioUrl)
             client.from("voice_messages")
                 .insert(
                     mapOf(
-                        "user_id" to userId,
-                        "audio_url" to audioUrl,
-                        "created_at" to System.currentTimeMillis()
+                        "user_id" to VM.user_id,
+                        "audio_url" to VM.audio_url,
                     )
                 )
-
+            Log.d("AUDIOOO", "inserted in table")
             val voiceMessage = client.from("voice_messages")
                 .select() {
                     filter { eq("audio_url", audioUrl) }
                 }
-                .decodeSingle<VoiceMessageResponse>()
-
+                .decodeSingle<VoiceMessage>()
+            Log.d("AUDIOOO", "took from table")
             Log.d("AUDIOOO", "voice id is ${voiceMessage.id}")
+            var defaultMessage = Message(room_id = roomId, user_id = userId, content = null, audio_message_id = voiceMessage.id, id = null, created_at = null)
             client.from("messages").insert(
                 mapOf(
-                    "room_id" to roomId,
-                    "user_id" to userId,
-                    "audio_message_id" to voiceMessage.id,
-                    "created_at" to System.currentTimeMillis()
+                    "room_id" to defaultMessage.room_id,
+                    "user_id" to defaultMessage.user_id,
+                    "audio_message_id" to defaultMessage.audio_message_id,
                 )
             )
 
