@@ -3,6 +3,7 @@ package com.example.moontalk
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -57,15 +58,19 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
     var isActive by remember {mutableStateOf(true)}
     suspend fun currentlySearchingForCompanion(){
         while (isSearching){
+            delay(1000)
             if (!isActive) break
+            Log.d("FindCompanions", "Looking for companion my username is ${myProfile!!.username}")
             var result = rep.startSearchCompanions(myProfile)
             if (result.isSuccess) {
                 if (result.getOrNull() != null) {
                     friendProfile = result.getOrNull()
+                    Log.d("FindCompanions", "Found friend ${friendProfile?.username}")
                     var result = rep.createRoom(myProfile, friendProfile)
                     if (result.isSuccess) {
-                        room = result.getOrNull()
+                        Log.d("FindCompanions", "Created room ${result.getOrNull()?.id}, variable room is ${room?.id}")
                     }
+                    Log.d("FindCompanions", "Deleting duplicate rooms for ${myProfile?.id} and ${friendProfile?.id}")
                     room = rep.deleteDuplicateRoom(myProfile, friendProfile).getOrNull()
                     isSearching = false
                     rep.changeUserSearching(false)
@@ -96,8 +101,10 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
         AppState.currentRoomId = room?.id
         chat(myProfile, friendProfile, {showChat = false
                                        onSearchingChanged(false)
-            AppState.currentRoomId = null}, room, {
+            AppState.currentRoomId = null
+            room = null}, room, {
                 showChat = false
+                room = null
                 isSearching = true
                 onSearchingChanged(true)
             CoroutineScope(Dispatchers.IO).launch {

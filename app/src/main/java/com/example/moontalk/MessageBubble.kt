@@ -1,5 +1,6 @@
 package com.example.moontalk
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,37 +31,48 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 @Composable
 fun MessageBubble(message: Message, isMyMessage: Boolean) {
-    var audioPlayer by remember { mutableStateOf<AudioPlayerManager?>(AudioPlayerManager()) }
+    val audioPlayer = remember { AudioPlayerManager() }
     var isPlaying by remember { mutableStateOf(false) }
+    var audioUrl by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    val rep = SupabaseRepository()
 
     LaunchedEffect(message.audio_message_id) {
-        // Сброс состояния при новом сообщении
+        if (message.audio_message_id != null) {
+            isLoading = true
+            audioUrl = rep.getMessageAudioUrl(message)
+            isLoading = false
+        }
         isPlaying = false
+        Log.d("Chat", "Message text is ${message.content}")
     }
+
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = if (isMyMessage) Arrangement.Start else Arrangement.End
+        horizontalArrangement = if (isMyMessage) Arrangement.Start else Arrangement.End  // ← End для своих
     ) {
-        Box(Modifier.background(
-            color = if (isMyMessage) Color(0xFF9C27B0) else Color(0xFF1E1E1E),
-            shape = RoundedCornerShape (16.dp, 16.dp, if (isMyMessage) 4.dp else 16.dp,
-                if (isMyMessage) 16.dp else 4.dp)
-        ).padding(horizontal = 16.dp, vertical = 12.dp).widthIn(max = 280.dp)
+        Box(
+            Modifier.background(
+                color = if (isMyMessage) Color(0xFF9C27B0) else Color(0xFF1E1E1E),
+                shape = RoundedCornerShape(16.dp, 16.dp, if (isMyMessage) 4.dp else 16.dp,
+                    if (isMyMessage) 16.dp else 4.dp)
+            ).padding(horizontal = 16.dp, vertical = 12.dp).widthIn(max = 280.dp)
         ) {
             if (message.audio_message_id != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable{
-                        //взять с бакета ссылку на аудио
-                        val audioUrl = "https://nfzhklakrgnjleuacrzw.supabase.co/storage/v1/object/public/voice_bucket/voice_messages/5d1708df-33d9-4917-9f01-358a350500bd/voice_1777476525981.m4a"
+                    modifier = Modifier.clickable {
+                        if (audioUrl.isNullOrEmpty()) return@clickable
+
                         if (isPlaying) {
-                            audioPlayer?.stop()
+                            audioPlayer.stop()
                             isPlaying = false
                         } else {
-                            audioPlayer?.play(audioUrl) {
+                            audioPlayer.play(audioUrl!!) {
                                 isPlaying = false
                             }
                             isPlaying = true
@@ -68,22 +81,30 @@ fun MessageBubble(message: Message, isMyMessage: Boolean) {
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Close else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Пауза" else "Воспроизвести",
+                        contentDescription = if (isPlaying) "Остановить" else "Воспроизвести",
                         tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isPlaying) "00:00" else "🎤 Голосовое",
+                        text = when {
+                            isLoading -> "🔄 Загрузка..."
+                            audioUrl == "e" || audioUrl == null -> "❌ Ошибка"
+                            isPlaying -> "🎵 Играет"
+                            else -> "🎤 Голосовое"
+                        },
                         color = Color.White,
                         fontSize = 14.sp
                     )
                 }
             } else {
-                Text(message.content?:"", fontSize = 16.sp,
-                    lineHeight = 22.sp, color = Color.White)
+                Text(
+                    message.content ?: "",
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    color = Color.White
+                )
             }
-
         }
     }
 }

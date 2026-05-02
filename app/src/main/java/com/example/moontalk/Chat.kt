@@ -84,7 +84,6 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            // Разрешение получено, можно начинать запись
         } else {
             alertMessage = "Нужно разрешение на запись аудио"
             showAlert = true
@@ -96,34 +95,27 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             listState.animateScrollToItem(messages.size - 1)
         }
     }
-    LaunchedEffect(room?.id) {
-        if (room?.id != null) {
-            while (true){
-                delay(1000)
+
+    LaunchedEffect(localRoom?.id) {
+        if (localRoom?.id != null) {
+            while (true) {
+                delay(4000)
                 var exists = rep.checkRoomExists(localRoom?.id.toString())
                 if (!exists){
                     Log.d("ExSer", "Room doesnt exist")
                     alertMessage = "Собеседник закончил диалог"
                     showAlert = true
-                    delay (1000)
                     onCloseChat()
                     break
+                }
+                val newMessages = rep.listenForNewMessages(localRoom?.id.toString())
+                if (newMessages != messages) {
+                    messages = newMessages
                 }
             }
         }
     }
 
-    LaunchedEffect(room?.id) {
-        if (room?.id != null) {
-            while (true) {
-                val newMessages = rep.listenForNewMessages(room.id)
-                if (newMessages != messages) {
-                    messages = newMessages
-                }
-                delay(2000)
-            }
-        }
-    }
     LaunchedEffect(Unit) {
         alertMessage = "Room id is ${localRoom?.id}"
         showAlert = true
@@ -134,10 +126,10 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
 1    }
 
     fun sendMessage(){
-        if (messageText.isNotBlank() && SupabaseClient.client.auth.currentUserOrNull()?.id != null && room?.id != null) {
+        if (messageText.isNotBlank() && SupabaseClient.client.auth.currentUserOrNull()?.id != null && localRoom?.id != null) {
             val newMessage = Message(
                 id = null,
-                room_id = room.id,
+                room_id = localRoom?.id,
                 user_id = profile1?.id,
                 content = messageText,
                 created_at = null,
@@ -156,7 +148,7 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
                 makingAudioMessage = true
 
                 val result = rep.sendVoiceMessageWithFile(
-                    roomId = room.id,
+                    roomId = localRoom?.id!!,
                     userId = profile1?.id,
                     audioFile = audioFile
                 )
@@ -175,9 +167,9 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             Column (horizontalAlignment = Alignment.CenterHorizontally) {
                 IconButton(onClick = {
                     scope.launch {
-                        if (room?.id != null) {
-                            rep.deleteRoom(room.id)
-                            rep.deleteAllMessagesFromRoom(room.id)
+                        if (localRoom?.id != null) {
+                            rep.deleteRoom(localRoom?.id!!)
+                            rep.deleteAllMessagesFromRoom(localRoom?.id!!)
                             onCloseChat()
                         } else {
                             alertMessage = "ROOM ID IS NULL"

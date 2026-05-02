@@ -127,14 +127,16 @@ class SupabaseRepository {
     suspend fun startSearchCompanions(profile: Profile?) : Result<Profile?> {
         return try {
             var language = getUserLanguage(profile)?.learning_language
+            Log.d("FindCompanions", "Looking for companion with ${language}")
             if (profile?.id != null) {
-                Result.success(client.from("profiles").select(){
+                var result = client.from("profiles").select(){
                     filter { neq("id", profile?.id?:"")
                         eq("is_online", true)
                         eq ("is_searching", true)
                         eq("learning_language", language?:"")
                     }
-                }.decodeSingleOrNull<Profile>())
+                }.decodeSingleOrNull<Profile>()
+                Result.success(result)
             } else {
                 return Result.failure(Exception("Userid not found"))
             }
@@ -256,7 +258,7 @@ class SupabaseRepository {
     }
     suspend fun checkRoomExists(roomId: String): Boolean {
         return try {
-            Log.d("ExSer", "id room is ${roomId}")
+            //Log.d("ExSer", "id room is ${roomId}")
             val room = client.from("rooms")
                 .select() {
                     filter {
@@ -266,6 +268,7 @@ class SupabaseRepository {
                 .decodeSingleOrNull<Room>()
             room != null
         } catch (e: Exception) {
+            Log.d("Chat", "Error is ${e.message}")
             false
         }
     }
@@ -361,6 +364,22 @@ class SupabaseRepository {
         } catch (e: Exception) {
             Log.e("AUDIOOO", "Error: ${e.message}")
             Result.failure(e)
+        }
+    }
+
+    suspend fun getMessageAudioUrl(message: Message): String? {
+        return try {
+            if (message.audio_message_id == null) return null
+
+            val response = client.from("voice_messages")
+                .select()
+                {filter { eq("id", message.audio_message_id) }}
+                .decodeSingle<VoiceMessage>()
+
+            response.audio_url
+        } catch (e: Exception) {
+            Log.e("AUDIOOO", "Error getting audio URL: ${e.message}")
+            null
         }
     }
 }
