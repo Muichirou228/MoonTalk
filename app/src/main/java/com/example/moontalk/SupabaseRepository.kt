@@ -369,7 +369,7 @@ class SupabaseRepository {
                 .select()
                 {filter { eq("id", message.audio_message_id) }}
                 .decodeSingle<VoiceMessage>()
-
+            Log.d("Chat", "This message audio url is ${response.audio_url}")
             response.audio_url
         } catch (e: Exception) {
             Log.e("AUDIOOO", "Error getting audio URL: ${e.message}")
