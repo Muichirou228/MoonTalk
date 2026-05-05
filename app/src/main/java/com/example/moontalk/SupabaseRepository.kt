@@ -3,6 +3,7 @@ package com.example.moontalk
 import android.service.autofill.Validators.and
 import android.service.autofill.Validators.or
 import android.util.Log
+import androidx.annotation.Nullable
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.gotrue.providers.builtin.Email
@@ -10,6 +11,7 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.delay
 import java.io.File
+import java.util.Objects.isNull
 import kotlin.collections.mapOf
 
 
@@ -124,128 +126,120 @@ class SupabaseRepository {
         }.decodeSingleOrNull<Profile>()
     }
 
-    suspend fun startSearchCompanions(profile: Profile?) : Result<Profile?> {
-        return try {
-            var language = getUserLanguage(profile)?.learning_language
-            Log.d("FindCompanions", "Looking for companion with ${language}")
-            if (profile?.id != null) {
-                var result = client.from("profiles").select(){
-                    filter { neq("id", profile?.id?:"")
-                        eq("is_online", true)
-                        eq ("is_searching", true)
-                        eq("learning_language", language?:"")
-                    }
-                }.decodeSingleOrNull<Profile>()
-                Result.success(result)
-            } else {
-                return Result.failure(Exception("Userid not found"))
+    suspend fun test() {
+        var result = client.from("profiles").select {
+            filter{
+                eq("learning_language", "Английский")
             }
+        }.decodeList<Profile>()
+        Log.d("FindCompanions", "found ${result.size} profiles")
+    }
 
-        } catch(e: Exception) {
+    suspend fun findWaitingRoom(userId: String, language: String): Result<Room?> {
+        return try {
+            Log.d("FindCompanions", "finding rooms")
+            var waitroom = client.from("rooms").select{
+                filter{
+                    eq("status", "waiting")
+                }
+            }.decodeList<Room>()
+            Log.d("FindCompanions", "Found ${waitroom.size} waiting rooms")
+            if (!waitroom.isEmpty()) {
+                for (room in waitroom) {
+                    Log.d("FindCompanions", "Counting rooms, ${room.id}")
+                    val creator = client.from("profiles")
+                        .select()
+                        {filter { eq("id", room.user1_id.toString()) }}
+                        .decodeSingleOrNull<Profile>()
+
+                    if (creator?.learning_language == language) {
+                        Log.d("FindCompanions", "found room with language ${language}")
+                        return Result.success(room)
+                    }
+                }
+            }
+            Log.d("FindCompanions", "returning null")
+            Result.success(null)
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun createRoom(profile1: Profile?, profile2: Profile?): Result<Room?> {
+
+    suspend fun createWaitingRoom(userId: String): Result<Room?> {
         return try {
-            if (profile1 == null || profile2 == null) {
-                return Result.failure(Exception("Profiles cannot be null"))
-            }
-            var roomAlreadyExist = findExistingRooms(profile1, profile2).getOrNull()
-            if (roomAlreadyExist == null) {
-                client.from("rooms")
-                    .insert(
-                        mapOf(
-                            "user1_id" to profile1.id,
-                            "user2_id" to profile2.id
-                        )
+            Log.d("FindCompanions", "creating a room")
+            client.from("rooms")
+                .insert(mapOf(
+                    "user1_id" to userId
+                ))
+            val room = client.from("rooms").select {
+                filter{
+                    eq ("user1_id", userId)
+                }
+            }.decodeSingleOrNull<Room>()
+            Log.d("FindCompanions", "created a room")
+            Result.success(room)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun joinRoom(roomId: String?, userId: String): Result<Room?> {
+        return try {
+            Log.d("FindCompanions", "joining a room with id = ${roomId}")
+            client.from("rooms")
+                .update(
+                    mapOf(
+                        "user2_id" to userId,
+                        "status" to "active"
                     )
-            }
-            var result = client.from("rooms").select { filter { eq("user1_id", profile1.id)
-                eq("user2_id", profile2.id)} }.decodeSingleOrNull<Room>()
-            if (result != null) {
-                Result.success(result)
-            } else {
-                result = client.from("rooms").select { filter { eq("user2_id", profile1.id)
-                    eq("user1_id", profile2.id)} }.decodeSingleOrNull<Room>()
-                Result.success(result)
-            }
+                ) {
+                    filter { eq("id", roomId!!) }
+                }
+            val room = client.from("rooms")
+                .select()
+                {filter { eq("id", roomId!!) }}
+                .decodeSingleOrNull<Room>()
 
+            Result.success(room)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun deleteDuplicateRoom(profile1: Profile?, profile2: Profile?) : Result<Room?>{
-        try {
-            val firstId = if (profile1?.id.toString() < profile2?.id.toString()) profile1?.id else profile2?.id
-            val secondId = if (profile1?.id.toString() < profile2?.id.toString()) profile2?.id else profile1?.id
-
-            val room1 = client.from("rooms")
-                .select() {
-                    filter {
-                        eq("user1_id", firstId.toString())
-                        eq("user2_id", secondId.toString())
-                    }
-                }
+    suspend fun getRoomStatus(roomId: String?): Room? {
+        return try {
+            if (roomId == null) return null
+            client.from("rooms")
+                .select()
+                {filter { eq("id", roomId) }}
                 .decodeSingleOrNull<Room>()
-
-            val room2 = client.from("rooms")
-                .select() {
-                    filter {
-                        eq("user1_id", secondId.toString())
-                        eq("user2_id", firstId.toString())
-                    }
-                }
-                .decodeSingleOrNull<Room>()
-
-            if (room1 != null && room2 != null) {
-                Log.d("ExSer", "BOTH ROOMS FOUND ${room1.id} and ${room2.id}")
-                client.from("rooms").delete() {
-                        filter { eq("id", room1.id.toString()) }
-                    }
-                Log.d("ExSer", "Deleted ${room1.id}, returning ${room2.id}")
-                return Result.success(room2)
-            }
-            if (room1 != null) {
-                Log.d("ExSer", "Found only one room ${room1.id}")
-                return Result.success(room1)
-            }
-            if (room2 != null) {
-                Log.d("ExSer", "Found only one room ${room2.id}")
-                return Result.success(room2)
-            }
-            Log.d("ExSer", "No rooms found")
-            return Result.failure(Exception("No rooms found"))
         } catch (e: Exception) {
-            return Result.failure(e)
+            null
         }
     }
 
-    suspend fun findExistingRooms(profile1: Profile?, profile2: Profile?): Result<Room?>{
-        val existingRoom = client.from("rooms")
-            .select() {
-                filter {
-                    eq("user1_id", profile1?.id.toString())
-                    eq("user2_id", profile2?.id.toString())
+    suspend fun getFriendProfile(room: Room, myProfile: Profile): Profile? {
+        try {
+            var result1 = client.from("profiles").select {
+                filter{
+                    eq("id", room.user1_id.toString())
                 }
+            }.decodeSingleOrNull<Profile>()
+            var result2 = client.from("profiles").select {
+                filter{
+                    eq("id", room.user2_id.toString())
+                }
+            }.decodeSingleOrNull<Profile>()
+            if (myProfile.username == result1?.username) {
+                return result2
+            } else {
+                return result1
             }
-            .decodeSingleOrNull<Room>()
-
-        if (existingRoom != null) {
-            return Result.success(existingRoom)
+        } catch(e: Exception) {
+            return null
         }
-        val existingRoomReverse = client.from("rooms")
-            .select() {
-                filter { eq("user1_id", profile2?.id.toString())
-                    eq("user2_id", profile1?.id.toString())}
-            }
-            .decodeSingleOrNull<Room>()
-
-        if (existingRoomReverse != null) {
-            return Result.success(existingRoomReverse)
-        }
-        return Result.success(null)
     }
 
     suspend fun deleteRoom(roomId: String): Result<Unit> {

@@ -99,12 +99,13 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
     LaunchedEffect(localRoom?.id) {
         if (localRoom?.id != null) {
             while (true) {
-                delay(4000)
+                delay(2000)
                 var exists = rep.checkRoomExists(localRoom?.id.toString())
                 if (!exists){
                     Log.d("ExSer", "Room doesnt exist")
                     alertMessage = "Собеседник закончил диалог"
                     showAlert = true
+                    delay(2000)
                     onCloseChat()
                     break
                 }

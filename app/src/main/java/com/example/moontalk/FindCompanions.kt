@@ -56,31 +56,43 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
     var alertMessage by remember {mutableStateOf("")}
     var showChat by remember {mutableStateOf(false)}
     var isActive by remember {mutableStateOf(true)}
-    suspend fun currentlySearchingForCompanion(){
-        while (isSearching){
-            delay(1000)
-            if (!isActive) break
-            Log.d("FindCompanions", "Looking for companion my username is ${myProfile!!.username}")
-            var result = rep.startSearchCompanions(myProfile)
-            if (result.isSuccess) {
-                if (result.getOrNull() != null) {
-                    friendProfile = result.getOrNull()
-                    Log.d("FindCompanions", "Found friend ${friendProfile?.username}")
-                    var result = rep.createRoom(myProfile, friendProfile)
-                    if (result.isSuccess) {
-                        Log.d("FindCompanions", "Created room ${result.getOrNull()?.id}, variable room is ${room?.id}")
-                    }
-                    Log.d("FindCompanions", "Deleting duplicate rooms for ${myProfile?.id} and ${friendProfile?.id}")
-                    room = rep.deleteDuplicateRoom(myProfile, friendProfile).getOrNull()
-                    isSearching = false
-                    rep.changeUserSearching(false)
-                    showChat = true
-                    break
-                }
-            } else {
-                alertMessage = result.exceptionOrNull().toString()
+    suspend fun currentlySearchingForCompanion() {
+        val result = rep.findWaitingRoom(
+            userId = myProfile!!.id,
+            language = myProfile!!.learning_language
+        )
+        if (result.isFailure) {
+            alertMessage = result.exceptionOrNull()?.message.toString()
+            showAlert = true
+        } else if (result.getOrNull() == null) {
+            val newRoom = rep.createWaitingRoom(myProfile!!.id)
+            if (newRoom.isFailure) {
+                alertMessage = newRoom.exceptionOrNull()?.message.toString()
                 showAlert = true
+            } else {
+                room = newRoom.getOrNull()
+                while (isSearching) {
+                    delay(3000)
+                    Log.d("FindCompanions", "Waiting for user2...")
+                    if (!isActive) break
+                    val currentRoom = rep.getRoomStatus(room?.id)
+                    if (currentRoom?.status == "active") {
+                        room = currentRoom
+                        friendProfile = rep.getFriendProfile(currentRoom, myProfile!!)
+                        isSearching = false
+                        rep.changeUserSearching(false)
+                        showChat = true
+                        break
+                    }
+                }
             }
+        } else {
+            var newRoom2 = rep.joinRoom(result.getOrNull()?.id, myProfile!!.id)
+            room = newRoom2.getOrNull()
+            friendProfile = rep.getFriendProfile(newRoom2.getOrNull()!!, myProfile!!)
+            isSearching = false
+            rep.changeUserSearching(false)
+            showChat = true
         }
     }
     DisposableEffect(Unit) {
@@ -89,6 +101,7 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
         }
     }
     LaunchedEffect(isSearching) {
+        Log.d("Chat", "Username that is searching is ${myProfile?.username}")
         if (isSearching) {
             seconds = 0
             while (isSearching) {
@@ -120,6 +133,7 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
                     if (isSearching) {
                         isSearching = false;
                         rep.changeUserSearching(isSearching)
+                        rep.deleteRoom(room?.id!!)
                         onSearchingChanged(false)
                     } else {
                         isSearching = true;
