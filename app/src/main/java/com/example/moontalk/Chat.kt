@@ -68,6 +68,7 @@ import kotlin.uuid.Uuid
 @Composable
 fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: Room?, onFindNewCompanion: () -> Unit, context: Context) {
     val rep = SupabaseRepository()
+    //val transcriber = remember { VoskTranscriber(context) }
     var scope = rememberCoroutineScope()
     var showAlert by remember { mutableStateOf(false) }
     var currentUserId = SupabaseClient.client.auth.currentUserOrNull()?.id
@@ -143,19 +144,20 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             messageText = ""
         }
     }
-    fun sendVoiceMessage(audioFile: File?) {
+    fun sendVoiceMessage(audioFile: File) {
         if (room?.id != null && profile1?.id != null) {
             scope.launch {
                 makingAudioMessage = true
-
+                //val transcript = transcriber.transcribe(audioFile)
                 val result = rep.sendVoiceMessageWithFile(
                     roomId = localRoom?.id!!,
                     userId = profile1?.id,
-                    audioFile = audioFile
+                    audioFile = audioFile,
+                    transcript = "I go to school yesterday"
                 )
 
                 if (result.isFailure) {
-                    alertMessage = result.exceptionOrNull()?.message ?: "Ошибка отправки"
+                    alertMessage = result.exceptionOrNull()?.message ?: "Ошибка"
                     showAlert = true
                 }
 
@@ -316,7 +318,7 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
                         val audioFile = audioRecorderManager?.stopRecording()
                         isRecording = false
                         Log.d("AUDIOOO", audioFile?.absolutePath.toString())
-                        sendVoiceMessage(audioFile)
+                        sendVoiceMessage(audioFile!!)
                     } else {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                             if (ContextCompat.checkSelfPermission(

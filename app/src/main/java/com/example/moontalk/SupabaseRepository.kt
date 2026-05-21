@@ -187,7 +187,7 @@ class SupabaseRepository {
 
     suspend fun joinRoom(roomId: String?, userId: String): Result<Room?> {
         return try {
-            Log.d("FindCompanions", "joining a room with id = ${roomId}")
+            Log.d("FindCompanions", "joining a room with id = ${roomId} and userId = ${userId}")
             client.from("rooms")
                 .update(
                     mapOf(
@@ -201,7 +201,7 @@ class SupabaseRepository {
                 .select()
                 {filter { eq("id", roomId!!) }}
                 .decodeSingleOrNull<Room>()
-
+            Log.d("FindCompanions", "joining a room with id = ${roomId}, SUCCESS")
             Result.success(room)
         } catch (e: Exception) {
             Result.failure(e)
@@ -222,19 +222,24 @@ class SupabaseRepository {
 
     suspend fun getFriendProfile(room: Room, myProfile: Profile): Profile? {
         try {
+            Log.d("FindCompanions", "trying to getFriendProfile")
             var result1 = client.from("profiles").select {
                 filter{
                     eq("id", room.user1_id.toString())
                 }
             }.decodeSingleOrNull<Profile>()
+            Log.d("FindCompanions", "Profile 1 is ${result1?.username}")
             var result2 = client.from("profiles").select {
                 filter{
                     eq("id", room.user2_id.toString())
                 }
             }.decodeSingleOrNull<Profile>()
+            Log.d("FindCompanions", "Profile 1 is ${result2?.username}")
             if (myProfile.username == result1?.username) {
+                Log.d("FindCompanions", "Found friend profile ${result2}")
                 return result2
             } else {
+                Log.d("FindCompanions", "Found friend profile ${result1}")
                 return result1
             }
         } catch(e: Exception) {
@@ -313,7 +318,7 @@ class SupabaseRepository {
         }
     }
 
-    suspend fun sendVoiceMessageWithFile(roomId: String, userId: String?, audioFile: File?): Result<Unit> {
+    suspend fun sendVoiceMessageWithFile(roomId: String, userId: String?, audioFile: File, transcript: String?): Result<Unit> {
         return try {
             val fileName = "voice_${System.currentTimeMillis()}.m4a"
             val path = "voice_messages/$roomId/$fileName"
@@ -326,12 +331,14 @@ class SupabaseRepository {
             Log.d("AUDIOOO", "uploaded file in bucket")
             val audioUrl = client.storage.from("voice_bucket").publicUrl(path)
             Log.d("AUDIOOO", "took file from bucket, ${audioUrl}, inserting in table with data ${userId}, ${roomId}")
-            var VM = VoiceMessage(user_id = userId, audio_url = audioUrl)
+            Log.d("AUDIOOO", "Transcipt is ${transcript}")
+            var VM = VoiceMessage(user_id = userId, audio_url = audioUrl, transcript = transcript)
             client.from("voice_messages")
                 .insert(
                     mapOf(
                         "user_id" to VM.user_id,
                         "audio_url" to VM.audio_url,
+                        "transcript" to VM.transcript
                     )
                 )
             Log.d("AUDIOOO", "inserted in table")
