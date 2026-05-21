@@ -120,6 +120,7 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
     LaunchedEffect(Unit) {
         alertMessage = "Room id is ${localRoom?.id}"
         showAlert = true
+
     }
 
     LaunchedEffect(Unit) {

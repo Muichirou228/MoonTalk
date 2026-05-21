@@ -187,8 +187,8 @@ class SupabaseRepository {
 
     suspend fun joinRoom(roomId: String?, userId: String): Result<Room?> {
         return try {
-            Log.d("FindCompanions", "joining a room with id = ${roomId}")
-            client.from("rooms")
+            Log.d("FindCompanions", "joining a room with id = ${roomId} and ${userId}")
+            val room = client.from("rooms")
                 .update(
                     mapOf(
                         "user2_id" to userId,
@@ -196,48 +196,48 @@ class SupabaseRepository {
                     )
                 ) {
                     filter { eq("id", roomId!!) }
-                }
-            val room = client.from("rooms")
-                .select()
-                {filter { eq("id", roomId!!) }}
-                .decodeSingleOrNull<Room>()
-
+                    select()
+                }.decodeSingleOrNull<Room>()
+            Log.d("FindCompanions", "joining a room with id = ${roomId}, SUCCESS")
             Result.success(room)
         } catch (e: Exception) {
+            Log.d("FindCompanions", "ERROR : ${e.message}")
             Result.failure(e)
         }
     }
 
     suspend fun getRoomStatus(roomId: String?): Room? {
         return try {
+            Log.d("FindCompanions", "Trying to get roomstatus for ${roomId}")
             if (roomId == null) return null
-            client.from("rooms")
+            val room = client.from("rooms")
                 .select()
                 {filter { eq("id", roomId) }}
                 .decodeSingleOrNull<Room>()
+            Log.d("FindCompanions", "Found room ${room?.id} with status ${room?.status}")
+            return room
         } catch (e: Exception) {
+            Log.d("FindCompanions", "ERRPR : ${e.message}")
             null
         }
     }
 
     suspend fun getFriendProfile(room: Room, myProfile: Profile): Profile? {
         try {
-            var result1 = client.from("profiles").select {
-                filter{
-                    eq("id", room.user1_id.toString())
-                }
-            }.decodeSingleOrNull<Profile>()
-            var result2 = client.from("profiles").select {
-                filter{
-                    eq("id", room.user2_id.toString())
-                }
-            }.decodeSingleOrNull<Profile>()
-            if (myProfile.username == result1?.username) {
-                return result2
-            } else {
-                return result1
-            }
+            val friendId = if (room.user1_id == myProfile.id) room.user2_id else room.user1_id
+            Log.d("FindCompanions", "friendId = $friendId")
+
+            Log.d("FindCompanions", "Запрос к profiles...")
+            val friend = client.from("profiles")
+                .select()
+                {filter { eq("id", friendId ?: return null) }}
+                .decodeSingleOrNull<Profile>()
+            Log.d("FindCompanions", "Запрос выполнен, результат = ${friend?.username}")
+
+            return friend
+
         } catch(e: Exception) {
+            Log.d("FindCompanions", "ERROR in getFriendProfile: ${e.message}")
             return null
         }
     }

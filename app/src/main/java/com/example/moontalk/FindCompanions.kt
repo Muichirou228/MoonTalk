@@ -74,14 +74,18 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
                 while (isSearching) {
                     delay(3000)
                     Log.d("FindCompanions", "Waiting for user2...")
-                    if (!isActive) break
+                    if (!isActive) {
+                        Log.d("FindCompanions", "ISACTIVE IS FALSE")
+                        break
+                    }
                     val currentRoom = rep.getRoomStatus(room?.id)
                     if (currentRoom?.status == "active") {
+                        Log.d("FindCompanions", "Room status is active")
                         room = currentRoom
                         friendProfile = rep.getFriendProfile(currentRoom, myProfile!!)
+                        showChat = true
                         isSearching = false
                         rep.changeUserSearching(false)
-                        showChat = true
                         break
                     }
                 }
@@ -90,9 +94,19 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
             var newRoom2 = rep.joinRoom(result.getOrNull()?.id, myProfile!!.id)
             room = newRoom2.getOrNull()
             friendProfile = rep.getFriendProfile(newRoom2.getOrNull()!!, myProfile!!)
-            isSearching = false
-            rep.changeUserSearching(false)
+            Log.d("FindCompanions", "friend profile name is finally ${friendProfile?.username}")
+            Log.d("FindCompanions", "showChat = true сейчас будет")
             showChat = true
+            Log.d("FindCompanions", "showChat = true установлено")
+            isSearching = false
+            Log.d("FindCompanions", "isSearching = ${isSearching}")
+            try {
+            rep.changeUserSearching(false)
+                Log.d("FindCompanions", "changing usersearching to false")
+
+            } catch (e: Exception) {
+                Log.d("FindCompanions", "ОШИБКА при showChat = true: ${e.message}")
+            }
         }
     }
     DisposableEffect(Unit) {
@@ -110,6 +124,7 @@ fun FindCompanions(initialProfile: Profile?, onSearchingChanged: (searching: Boo
             }
         }
     }
+
     if (showChat) {
         AppState.currentRoomId = room?.id
         chat(myProfile, friendProfile, {showChat = false
