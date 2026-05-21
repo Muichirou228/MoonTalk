@@ -210,12 +210,10 @@ class SupabaseRepository {
         return try {
             Log.d("FindCompanions", "Trying to get roomstatus for ${roomId}")
             if (roomId == null) return null
-            val room = client.from("rooms")
+            client.from("rooms")
                 .select()
                 {filter { eq("id", roomId) }}
                 .decodeSingleOrNull<Room>()
-            Log.d("FindCompanions", "Found room ${room?.id} with status ${room?.status}")
-            return room
         } catch (e: Exception) {
             Log.d("FindCompanions", "ERRPR : ${e.message}")
             null

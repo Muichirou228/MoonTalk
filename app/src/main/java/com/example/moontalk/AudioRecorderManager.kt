@@ -2,7 +2,6 @@ package com.example.moontalk
 
 import android.content.Context
 import android.media.MediaRecorder
-import android.util.Log
 import java.io.File
 
 class AudioRecorderManager(private val context: Context) {
@@ -15,17 +14,14 @@ class AudioRecorderManager(private val context: Context) {
 
             mediaRecorder = MediaRecorder().apply {
                 setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.AMR_WB) // Или другой формат, подходящий для PCM
-                setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB)
-                setAudioSamplingRate(16000)  // ← добавить эту строку
-                setAudioChannels(1)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 setOutputFile(audioFile?.absolutePath)
                 prepare()
                 start()
             }
             true
         } catch (e: Exception) {
-            Log.d("AUDIOOO", "Error while reccording is ${e.message}")
             false
         }
     }
