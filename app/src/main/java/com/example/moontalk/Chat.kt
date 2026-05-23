@@ -1,10 +1,13 @@
 package com.example.moontalk
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.os.Build
+import android.speech.RecognizerIntent
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,13 +33,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,13 +80,34 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
     var currentUserId = SupabaseClient.client.auth.currentUserOrNull()?.id
     var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
     val listState = rememberLazyListState()
+    var showVoiceMenu by remember {mutableStateOf(false)}
+    var makingAudioMessage by remember {mutableStateOf(false)}
     var alertMessage by remember {mutableStateOf("")}
     var localRoom by remember {mutableStateOf<Room?>(room)}
     var messageText by remember { mutableStateOf("") }
     var isRecording by remember { mutableStateOf(false) }
-    var makingAudioMessage by remember { mutableStateOf(false) }
     var audioRecorderManager by remember { mutableStateOf<AudioRecorderManager?>(null) }
 
+    fun sendVoiceMessage(audioFile: File?) {
+        if (room?.id != null && profile1?.id != null) {
+            scope.launch {
+                makingAudioMessage = true
+
+                val result = rep.sendVoiceMessageWithFile(
+                    roomId = localRoom?.id!!,
+                    userId = profile1?.id,
+                    audioFile = audioFile
+                )
+
+                if (result.isFailure) {
+                    alertMessage = result.exceptionOrNull()?.message ?: "Ошибка отправки"
+                    showAlert = true
+                }
+
+                makingAudioMessage = false
+            }
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -89,6 +117,74 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             showAlert = true
         }
     }
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val recognizedText = results?.getOrNull(0) ?: ""
+
+            if (recognizedText.isNotBlank()) {
+                Log.d("Chat", "Распознано: $recognizedText")
+
+                scope.launch {
+                    Log.d("GIGACHAT_FEEDBACK", "НА ИИ ОТПРАВЛЯЕТСЯ текст ${recognizedText}")
+                    val feedback = rep.analyzeTextWithGigaChat(recognizedText)
+                    if (feedback.isSuccess) {
+                        Log.d("GIGACHAT_FEEDBACK", "Фидбек: ${feedback.getOrNull()}")
+                        val saveAI = rep.saveAIFeedback(recognizedText, feedback.getOrNull()?:"")
+                        if (saveAI.isSuccess) {
+                            Log.d("GIGACHAT_FEEDBACK", "SAVED FEEDBACK")
+                            alertMessage = "Фидбэк успешно получен" +
+                                    "\nРезультат можно посмотреть на странице Фидбэков после закрытия чата"
+                            showAlert = true
+                        } else {
+                            Log.d("GIGACHAT_FEEDBACK", "ERROR SAVE: ${feedback.exceptionOrNull()}")
+                            alertMessage = "Ошибка получения фидбека, ${feedback.exceptionOrNull().toString()}"
+                            showAlert = true
+                        }
+                    } else {
+                        Log.e("GIGACHAT_FEEDBACK", "Ошибка: ${feedback.exceptionOrNull()?.message}")
+                    }
+                }
+            }
+        } else {
+            // Ошибка или отмена — просто останавливаем запись
+            audioRecorderManager?.stopRecording()
+            isRecording = false
+        }
+    }
+
+    fun startVoiceRecordingForChat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                return
+            }
+        }
+        val success = audioRecorderManager?.startRecording() == true
+        if (success) {
+            isRecording = true
+        } else {
+            alertMessage = "Не удалось начать запись"
+            showAlert = true
+        }
+    }
+
+    fun startAIAnalysis() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Скажите фразу на английском")
+        }
+        speechRecognizerLauncher.launch(intent)
+    }
+
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -118,12 +214,6 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
     }
 
     LaunchedEffect(Unit) {
-        alertMessage = "Room id is ${localRoom?.id}"
-        showAlert = true
-
-    }
-
-    LaunchedEffect(Unit) {
         audioRecorderManager = AudioRecorderManager(context)
 1    }
 
@@ -144,26 +234,7 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             messageText = ""
         }
     }
-    fun sendVoiceMessage(audioFile: File?) {
-        if (room?.id != null && profile1?.id != null) {
-            scope.launch {
-                makingAudioMessage = true
 
-                val result = rep.sendVoiceMessageWithFile(
-                    roomId = localRoom?.id!!,
-                    userId = profile1?.id,
-                    audioFile = audioFile
-                )
-
-                if (result.isFailure) {
-                    alertMessage = result.exceptionOrNull()?.message ?: "Ошибка отправки"
-                    showAlert = true
-                }
-
-                makingAudioMessage = false
-            }
-        }
-    }
     Column (Modifier.fillMaxSize().background(Color.Black)) {
         Row (Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column (horizontalAlignment = Alignment.CenterHorizontally) {
@@ -316,26 +387,11 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
                     if (isRecording) {
                         val audioFile = audioRecorderManager?.stopRecording()
                         isRecording = false
-                        Log.d("AUDIOOO", audioFile?.absolutePath.toString())
-                        sendVoiceMessage(audioFile)
+                        if (audioFile != null) {
+                            sendVoiceMessage(audioFile)
+                        }
                     } else {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            if (ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.RECORD_AUDIO
-                                ) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                return@IconButton
-                            }
-                        }
-                        val success = audioRecorderManager?.startRecording() == true
-                        if (success) {
-                            isRecording = true
-                        } else {
-                            alertMessage = "Не удалось начать запись"
-                            showAlert = true
-                        }
+                        showVoiceMenu = true
                     }
                 },
                 modifier = Modifier.size(48.dp).clip(CircleShape).background(if (isRecording) Color.Red else Color(0xFF9C27B0))
@@ -344,7 +400,71 @@ fun chat(profile1: Profile?, profile2: Profile?, onCloseChat: () -> Unit, room: 
             }
         }
     }
+    if (showVoiceMenu) {
+        AlertDialog(
+            onDismissRequest = { showVoiceMenu = false },
+            containerColor = Color(0xFF1E1E1E),
+            title = {
+                Text(
+                    text = "Выберите действие",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Кнопка 1: Голосовое сообщение в чат
+                    Button(
+                        onClick = {
+                            showVoiceMenu = false
+                            startVoiceRecordingForChat()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF9C27B0)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Отправить голосовое сообщение")
+                    }
 
+                    // Кнопка 2: Анализ речи ИИ
+                    Button(
+                        onClick = {
+                            showVoiceMenu = false
+                            startAIAnalysis()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1E88E5)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Анализ речи ИИ (фидбек)")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showVoiceMenu = false }) {
+                    Text("Отмена", color = Color.Gray)
+                }
+            }
+        )
+    }
     if (showAlert) {
         MaterialAlert(alertMessage, {showAlert = false})
     }

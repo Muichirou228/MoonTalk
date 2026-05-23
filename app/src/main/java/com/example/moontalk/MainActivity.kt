@@ -60,17 +60,27 @@ class MainActivity : ComponentActivity() {
                     var profile by remember {mutableStateOf<Profile?>(null)}
                     var rep = SupabaseRepository()
                     LaunchedEffect(Unit) {
-                        var isLoggedIn = rep.isUserLoggedIn()
+                        val isLoggedIn = rep.isUserLoggedIn()
                         isAuthenticated = isLoggedIn
+
                         if (isLoggedIn) {
-                            rep.changeUserSearching(false)
-                            rep.changeUserOnline(isLoggedIn)
+                            val result = rep.getProfile()
+                            if (result.isSuccess) {
+                                profile = result.getOrNull()
+                                Log.d("Chat", "Profile loaded: ${profile?.id}")
+                                rep.changeUserSearching(false)
+                                rep.changeUserOnline(true)
+                            } else {
+                                Log.e("Chat", "Failed to load profile: ${result.exceptionOrNull()?.message}")
+                                isAuthenticated = false
+                            }
                         }
                         isLoading = false
                     }
                     LaunchedEffect(isAuthenticated) {
                         if (isAuthenticated) {
                             profile = rep.getProfile().getOrNull()
+                            Log.d("Chat", "Profile in main activity is ${profile?.id}")
                         }
                     }
                     if (isLoading) {
@@ -81,6 +91,7 @@ class MainActivity : ComponentActivity() {
                         Crossfade(targetState = Pair(isAuthenticated, showRegister)) { (isAuth, isRegister) ->
                             when {
                                 isAuth -> {
+                                    Log.d("Chat", "In menu as parametr goes ${profile?.id}")
                                     Menu(profile, {
                                         isAuthenticated = false
                                         scope.launch {

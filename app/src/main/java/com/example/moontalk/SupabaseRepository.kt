@@ -4,18 +4,150 @@ import android.service.autofill.Validators.and
 import android.service.autofill.Validators.or
 import android.util.Log
 import androidx.annotation.Nullable
+import com.google.gson.Gson
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.gotrue.providers.builtin.Email
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.storage.storage
+import com.google.gson.JsonObject
+import com.google.gson.JsonArray
+import com.google.gson.JsonParser
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.util.Objects.isNull
+import java.util.UUID
+import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 import kotlin.collections.mapOf
 
 
 class SupabaseRepository {
+
+    private data class GigaChatAuth(val access_token: String, val expires_at: Long)
+    private fun getUnsafeOkHttpClient(): OkHttpClient {
+        try {
+            // Создаем TrustManager, который доверяет всем сертификатам
+            val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out java.security.cert.X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+            })
+
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, trustAllCerts, java.security.SecureRandom())
+
+            val sslSocketFactory = sslContext.socketFactory
+
+            val builder = OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
+                .hostnameVerifier { _, _ -> true } // Отключает проверку имени хоста
+                .build()
+            return builder
+        } catch (e: Exception) {
+            throw RuntimeException(e)
+        }
+    }
+    suspend fun analyzeTextWithGigaChat(text: String): Result<String> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val client = getUnsafeOkHttpClient()
+
+                // 1. Получаем Access Token
+                val authUrl = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+                val authBody = "scope=GIGACHAT_API_PERS".toRequestBody("application/x-www-form-urlencoded".toMediaType())
+
+                val authRequest = Request.Builder()
+                    .url(authUrl)
+                    .post(authBody)
+                    .addHeader("Content-Type", "application/x-www-form-urlencoded")
+                    .addHeader("Accept", "application/json")
+                    .addHeader("RqUID", UUID.randomUUID().toString())
+                    .addHeader("Authorization", "Basic MDE5ZTRlZmEtOWQyOC03ZjZmLWI0M2QtMmY4MDQ1ZWM0YTk5OmM5ZTQwNDkxLTUwYmEtNDU3NS05MDhhLWYyNjczYTdhMDNkMg==")
+                    .build()
+
+                val authResponse = client.newCall(authRequest).execute()
+                if (!authResponse.isSuccessful) {
+                    return@withContext Result.failure(Exception("Auth failed: ${authResponse.code}"))
+                }
+
+                val authJson = Gson().fromJson(authResponse.body?.string(), JsonObject::class.java)
+                val accessToken = authJson.get("access_token").asString
+
+                // 2. Отправляем текст на анализ
+                val chatUrl = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
+
+                val prompt = """
+    Ты — профессиональный репетитор английского языка.
+    Проанализируй этот текст и верни ответ в виде обычного текста, без JSON, но с четким разделением на три блока.
+
+    Отвечай строго в таком формате:
+
+    Сильные стороны:
+    [напиши, что сделано хорошо]
+
+    Слабые стороны/ошибки:
+    [перечисли ошибки]
+
+    Совет по улучшению:
+    [дай рекомендации]
+
+    Текст пользователя: "$text"
+""".trimIndent()
+
+                val jsonBody = JsonObject().apply {
+                    addProperty("model", "GigaChat:latest")
+
+                    val messagesArray = JsonArray()
+                    val userMessage = JsonObject().apply {
+                        addProperty("role", "user")
+                        addProperty("content", prompt)
+                    }
+                    messagesArray.add(userMessage)
+                    add("messages", messagesArray)
+                }
+
+                val chatRequest = Request.Builder()
+                    .url(chatUrl)
+                    .post(jsonBody.toString().toRequestBody("application/json".toMediaType()))
+                    .addHeader("Authorization", "Bearer $accessToken")
+                    .addHeader("Accept", "application/json")
+                    .build()
+
+                val chatResponse = client.newCall(chatRequest).execute()
+                if (!chatResponse.isSuccessful) {
+                    return@withContext Result.failure(Exception("Analysis failed: ${chatResponse.code}"))
+                }
+
+                val responseText = chatResponse.body?.string() ?: ""
+
+                // Парсим ответ, чтобы достать content
+                val jsonResponse = JsonParser.parseString(responseText).asJsonObject
+                val choices = jsonResponse.getAsJsonArray("choices")
+                val message = choices[0].asJsonObject.get("message").asJsonObject
+                val content = message.get("content").asString
+
+                Result.success(content)
+
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
     private val client = SupabaseClient.client
     suspend fun signIn(email: String, password: String): Result<Profile> = try {
         val result = client.auth.signInWith(Email) {
@@ -38,13 +170,17 @@ class SupabaseRepository {
         return client.auth.currentUserOrNull() != null
     }
 
-    suspend fun getProfile(): Result<Profile?> {
+    suspend fun getProfile(): Result<Profile> {
         try {
             var userId = client.auth.currentUserOrNull()?.id
+            Log.d("Chat", "User id is ${userId}")
             if (userId != null) {
-                return Result.success(client.from("profiles").select() {
+                Log.d("Chat", "User id is not null, getting profile")
+                var result = client.from("profiles").select() {
                     filter { eq("id", userId) }
-                }.decodeSingleOrNull<Profile>())
+                }.decodeSingle<Profile>()
+                Log.d("Chat", "got profile ${result?.id}")
+                return Result.success(result)
             } else {
                 return Result.failure(Exception("No userid found"))
             }
@@ -349,9 +485,8 @@ class SupabaseRepository {
                 )
             )
 
-            audioFile?.delete()
-
             Log.d("AUDIOOO", "Voice message sent successfully")
+
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("AUDIOOO", "Error: ${e.message}")
@@ -372,6 +507,90 @@ class SupabaseRepository {
         } catch (e: Exception) {
             Log.e("AUDIOOO", "Error getting audio URL: ${e.message}")
             null
+        }
+    }
+
+    suspend fun saveAIFeedback (message: String, feedback: String): Result<Unit> {
+        return try {
+            val userId = client.auth.currentUserOrNull()?.id
+            val example = AiFeedback(user_id = userId, message_text = message, feedback_text = feedback)
+            client.from("ai_feedback").insert(
+                mapOf(
+                    "user_id" to example.user_id,
+                    "message_text" to example.message_text,
+                    "feedback_text" to example.feedback_text
+                )
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.d("Chat", "Error saving ai ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAIFeedbacks(): List<AiFeedback> {
+        return try {
+            val userId = client.auth.currentUserOrNull()?.id ?: return emptyList()
+
+            client.from("ai_feedback")
+                .select()
+                {filter { eq("user_id", userId) }}
+                .decodeList<AiFeedback>()
+        } catch (e: Exception) {
+            Log.e("FEEDBACK", "Error loading: ${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun getAccountCreatedYear(): String {
+        return try {
+            val userId = client.auth.currentUserOrNull()?.id ?: return "2026"
+
+            val profile = client.from("profiles")
+                .select()
+                {filter { eq("id", userId) }}
+                .decodeSingleOrNull<Profile>()
+
+            val createdAtString = profile?.created_at ?: return "2026"
+
+            // Парсим "2026-05-23T10:30:00.000Z" → "2026"
+            val year = createdAtString.substring(0, 4)
+            year
+        } catch (e: Exception) {
+            Log.e("PROFILE", "getAccountCreatedYear error: ${e.message}")
+            "2026"
+        }
+    }
+
+    suspend fun getFeedbacksCount(): Int {
+        return try {
+            val userId = client.auth.currentUserOrNull()?.id ?: return 0
+            Log.d("Chat", "trying ti get feedbackscount")
+            val result = client.from("ai_feedback")
+                .select()
+                {filter { eq("user_id", userId) }}
+                .decodeList<AiFeedback>()
+            Log.d("Chat", "Count: ${result.size}")
+            result.size
+        } catch (e: Exception) {
+            Log.d("Chat", "ERROR: ${e.message}")
+            0
+        }
+    }
+
+    suspend fun getVoiceCount(): Int {
+        return try {
+            val userId = client.auth.currentUserOrNull()?.id ?: return 0
+            Log.d("Chat", "trying ti get voicecount")
+            val result = client.from("voice_messages")
+                .select()
+                {filter { eq("user_id", userId) }}
+                .decodeList<VoiceMessage>()
+            Log.d("Chat", "voice count is ${result.size}")
+            result.size
+        } catch (e: Exception) {
+            Log.d("Chat", "ERROR: ${e.message}")
+            0
         }
     }
 }

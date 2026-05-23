@@ -1,6 +1,7 @@
 package com.example.moontalk
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.NavigationRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -23,6 +24,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +39,9 @@ import kotlinx.coroutines.launch
 fun Menu(profile: Profile?, onLogOut: () -> Unit, context: Context) {
     var selectedTab by remember { mutableStateOf(0) }
     var isSearching by remember {mutableStateOf(false)}
+    LaunchedEffect(Unit) {
+        Log.d("Chat", "Profile which is in menu is ${profile?.id}")
+    }
     Scaffold(
         bottomBar = {
             AnimatedVisibility(
@@ -127,7 +132,7 @@ fun Menu(profile: Profile?, onLogOut: () -> Unit, context: Context) {
                     searchStatus = isSearching,
                     context = context
                 )
-                1 -> Feedback()
+                1 -> FeedbackScreen()
                 2 -> Account(profile, onLogOut)
             }
         }
